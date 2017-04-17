@@ -1,1118 +1,1882 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
+using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net.Sockets;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
-using System.Text.RegularExpressions;
+using ProjectSummer.Repository;
+using ServioPumpGAS_Driver;
 
 namespace SPC_Raspberry
 {
+    public class TransactionInfo
+    {
+        public int Pump;
+        public int PaymentCode;
+        public int Fuel;
+        public int OrderInMoney;
+        public int Quantity;
+        public int Price;
+        public int Amount;
+        public string CardNum;
+        public string RRN;
+        public string BillImage;
+    };
+
     public partial class Form1 : Form
     {
-
-        /// <summary>
-        /// Класс для работы с терминалом или эмулятором терминала 
-        /// системы LifeStyleMarketing
-        /// </summary>
-        public class LifeStyle
+        public class Driver
         {
-            ProjectSummer.Repository.ConfigMemory conf = ProjectSummer.Repository.ConfigMemory.GetConfigMemory("LifeStyleAPI");
+            #region Глобальные переменные
+            public static Logger log = new Logger("SmartPumpControl_Driver");
+            public static object locker = new object();
 
-            [System.Runtime.InteropServices.DllImport("user32.dll")]
-            public static extern bool SetForegroundWindow(IntPtr hWnd);
+            public static long TransCounter;
+            public static int AmountMem, PriceMem, VolumeMem;
 
-            /// <summary>
-            /// Конструктор объекта обмена с терминалом.
-            /// </summary>
-            /// <param name="logPath">Путь до папки, в которую необходимо писать лог файлы</param>
-            /// <param name="logEnable">Если "true" - логирование включено.</param>
-            /// <param name="debug">Если "true" - ведение отладочной информации.</param>
-            /// <param name="lowLevelLog">Если "true" - логировать низкоуровневый обмен.</param>
-            public LifeStyle(string logPath, bool logEnable, bool debug, bool lowLevelLog)
+            private static long callback_SetDose(int Pump, int CardType)
             {
-                log = new ProjectSummer.Repository.Logger(logPath);
-                log.LogEnable = logEnable;
-                log.LogLevel = (debug ? 100 : 0);
-                obmen = new ProjectSummer.Repository.Logger(logPath);
-                obmen.LogEnable = lowLevelLog;
+                lock (locker)
+                {
+                    try
+                    {
+                        long result = -1;
+                        for (int z = 0; z < 5; z++)
+                        {
+                            result = callback_SetDose_callback?.Invoke(Pump, CardType, ctx) ?? -1;
+                            if (result != -1)
+                                break;
+                            else
+                                System.Threading.Thread.Sleep(1000);
+                        }
+                        return result;
+                    }
+                    catch { }
+                    return -1;
+                }
+            }
+            private static Driver.GetPumpStateResponce callback_GetDose(long Pump)
+            {
+                lock (locker)
+                {
+                    try
+                    {
+                        return callback_GetDose_callback?.Invoke(Pump, ctx) ?? default(Driver.GetPumpStateResponce);
+                    }
+                    catch { }
+                    return default(Driver.GetPumpStateResponce);
+                }
+            }
+            private static int callback_CancelDose(long TransID)
+            {
+                lock (locker)
+                {
+                    try
+                    {
+                        return callback_CancelDose_callback?.Invoke(TransID, ctx) ?? -1;
+                    }
+                    catch { }
+                    return -1;
+                }
+            }
+
+            private static int callback_SQL_Write(string SQL_Request, int retry_count = 5)
+            {
+                log.Write("\r\nЗапрос на выполнение скрипта SQL скрипта: " + SQL_Request);
+                lock (locker)
+                {
+                    try
+                    {
+                        log.Write("\r\nВыполнение SQL скрипта: " + SQL_Request);
+                        int result = -1;
+                        for (int z = 0; z < retry_count; z++)
+                        {
+                            result = callback_SQL_Write_callback?.Invoke(SQL_Request, ctx) ?? -1;
+                            log.Write($"Попытка \"{z + 1}\" результат: {result}");
+
+                            if (result == 1)
+                                break;
+                            else
+                                System.Threading.Thread.Sleep(1000);
+                        }
+
+                        return result;
+                    }
+                    catch { }
+                    return -1;
+                }
+            }
+            private static string[] callback_SQL_Read(string SQL_Request, int retry_count = 5)
+            {
+                try
+                {
+                    log.Write("\r\nЗапрос на выполнение скрипта SQL скрипта: " + SQL_Request);
+                    string result = "";
+                    lock (locker)
+                    {
+
+                        log.Write("\r\nВыполнение SQL скрипта: " + SQL_Request);
+                        for (int z = 0; z < retry_count; z++)
+                        {
+                            var ptr = callback_SQL_Read_callback?.Invoke(SQL_Request, ctx) ?? IntPtr.Zero;
+                            if (ptr != IntPtr.Zero)
+                                result = Marshal.PtrToStringAnsi(ptr);
+                            log.Write($"Попытка \"{z + 1}\" результат: {result}");
+
+                            if (result != "")
+                                break;
+                            else
+                                System.Threading.Thread.Sleep(1000);
+                        }
+                    }
+                    var tmpres = new List<string>();
+                    if (result != null && result != "empty" && result != "")
+                    {
+                        var tmp = result.Split(new string[] { ";empty;" }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var t in tmp)
+                        {
+                            tmpres.Add(t);
+                        }
+                    }
+                    return tmpres.ToArray();
+                }
+                catch { }
+                return new string[0];
+            }
+
+            private static int callback_HoldPump(int Pump, byte ReleasePump)
+            {
+                lock (locker)
+                {
+                    try
+                    {
+                        return callback_HoldPump_callback?.Invoke(Pump, ReleasePump, ctx) ?? -1;
+                    }
+                    catch { }
+                    return -1;
+                }
+            }
+
+            private static SetDose_Delegate callback_SetDose_callback;
+            private static GetDose_Delegate callback_GetDose_callback;
+            private static CancelDose_Delegate callback_CancelDose_callback;
+            private static HoldPump_Delegate callback_HoldPump_callback;
+            #region интеграция с ServioPump
+            private static SQL_Write_Delegate callback_SQL_Write_callback;
+            private static SQL_Read_Delegate callback_SQL_Read_callback;
+            #endregion
+
+
+            #region Интеграция с другими АСУ
+
+            private static UpdateFillingOver_Delegate UpdateFillingOver_callback;
+            private static InsertCardInfo_Delegate InsertCardInfo_callback;
+            private static SaveReciept_Delegate SaveReciept_callback;
+            #endregion
+
+            private static IntPtr ctx;
+            public static Dictionary<long, RemotePump_Driver.OrderInfo> TransMemory = new Dictionary<long, RemotePump_Driver.OrderInfo>();
+            #endregion
+
+            #region Структуры
+            public struct GetPumpStateResponce
+            {
+                public byte DispStatus;//0
+                public ushort StateFlags;//1
+                public int ErrorCode;//3
+                public byte DispMode;//7
+                public byte UpNozz;//8
+                public byte UpFuel;//9
+                public byte UpTank;//10
+                public Int64 TransID;//11
+                public byte PreselMode;//19
+                public double PreselDose;//20
+                public double PreselPice;//28
+                public byte PreselFuel;//36
+                public byte PreselFullTank;//37
+                public double FillingVolume;//38
+                public double FillingPrice;//46
+                public double FillingSum;//54
+
+                public static GetPumpStateResponce ReadFromPtr(IntPtr Ptr)
+                {
+                    var result = new GetPumpStateResponce()
+                    {
+                        DispStatus = Marshal.ReadByte(Ptr, 0),
+                        StateFlags = (ushort)Marshal.ReadInt16(Ptr, 1),
+                        ErrorCode = Marshal.ReadInt32(Ptr, 3),
+                        DispMode = Marshal.ReadByte(Ptr, 7),
+                        UpNozz = Marshal.ReadByte(Ptr, 8),
+                        UpFuel = Marshal.ReadByte(Ptr, 9),
+                        UpTank = Marshal.ReadByte(Ptr, 10),
+                        TransID = Marshal.ReadInt64(Ptr, 11),
+                        PreselMode = Marshal.ReadByte(Ptr, 19),
+                        PreselDose = BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 20)),
+                        PreselPice = BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 28)),
+                        PreselFuel = Marshal.ReadByte(Ptr, 36),
+                        PreselFullTank = Marshal.ReadByte(Ptr, 37),
+                        FillingVolume = BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 38)),
+                        FillingPrice = BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 46)),
+                        FillingSum = BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 54)),
+                    };
+                    //for (int z = 0; z < 62; z++)
+                    //    Marshal.WriteByte(Ptr, z, 0);
+                    return result;
+                }
+                public override string ToString()
+                {
+                    return string.Format("DispStatus:" + DispStatus.ToString()
+                                        + "\r\nStateFlags:" + StateFlags.ToString()
+                                        + "\r\nErrorCode:" + ErrorCode.ToString()
+                                        + "\r\nDispMode:" + DispMode.ToString()
+                                        + "\r\nUpNozz:" + UpNozz.ToString()
+                                        + "\r\nUpFuel:" + UpFuel.ToString()
+                                        + "\r\nUpTank:" + UpTank.ToString()
+                                        + "\r\nTransID:" + TransID.ToString()
+                                        + "\r\nPreselMode:" + PreselMode.ToString()
+                                        + "\r\nPreselDose:" + PreselDose.ToString()
+                                        + "\r\nPreselPice:" + PreselPice.ToString()
+                                        + "\r\nPreselFuel:" + PreselFuel.ToString()
+                                        + "\r\nPreselFullTank:" + PreselFullTank.ToString()
+                                        + "\r\nFillingVolume:" + FillingVolume.ToString()
+                                        + "\r\nFillingPrice:" + FillingPrice.ToString()
+                                        + "\r\nFillingSum:" + FillingSum.ToString());
+                }
+            }
+#warning Удален SetDoseResponse
+            /*public struct SetDoseResponse
+            {
+                //Offset: 0
+                public Int64 TransNum;
+                //Offset: 8
+                public DateTime _DateTime;
+                //Offset: 16
+                public Int32 RetCode;
+
+                public static SetDoseResponse ReadFromIntPtr(IntPtr Ptr)
+                {
+                    try
+                    {
+                        var transNum = Marshal.ReadInt64(Ptr);
+                        var dateTime = DateTime.FromOADate(BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 8)));
+                        var retCode = Marshal.ReadInt32(Ptr, 16);
+
+                        return new SetDoseResponse() { TransNum = transNum, _DateTime = dateTime, RetCode = retCode };
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Write(ex.ToString());
+                    }
+                    return new SetDoseResponse();
+                }
+
+                public override string ToString()
+                {
+                    return string.Format("TransNum = {0}, DateTime = {1}, RetCode = {2}", TransNum, _DateTime, RetCode);
+                }
+            }*/
+            //  [StructLayout(LayoutKind.Sequential)]
+            //  public struct TransactionInfo
+            // {
+            //   public int Pump;
+            //public int PaymentCode;
+            //public int Fuel;
+            //public int OrderInMoney;
+            //public int Quantity;
+            //public int Price;
+            //public int Amount;
+            //[MarshalAs(UnmanagedType.LPStr)]
+            //public string CardNum;
+            //[MarshalAs(UnmanagedType.LPStr)]
+            //public string RRN;
+            //    public RemotePump_Driver.OrderInfo Order;
+
+            //public static TransactionInfo ReadFromIntPtr(IntPtr ptr)
+            //{
+            //    return new TransactionInfo()
+            //    {
+            //        Pump = Marshal.ReadInt32(ptr, 0),
+            //        PaymentCode = Marshal.ReadInt32(ptr, 4),
+            //        Fuel = Marshal.ReadInt32(ptr, 8),
+            //        OrderInMoney = Marshal.ReadInt32(ptr, 12),
+            //        Quantity = Marshal.ReadInt32(ptr, 16),
+            //        Price = Marshal.ReadInt32(ptr, 20),
+            //        Amount = Marshal.ReadInt32(ptr, 24),
+            //        CardNum = Marshal.PtrToStringAnsi(ptr, 28),
+            //        RRN = Marshal.PtrToStringAnsi(ptr, 32),
+            //    };
+            //}
+
+            // }
+
+            public static void WriteOrderToIntPtr(RemotePump_Driver.OrderInfo Order, IntPtr ptr)
+            {
+                Marshal.WriteInt32(ptr, 0, Order.PumpNo);
+                Marshal.WriteInt32(ptr, 4, Order.PaymentCode);
+                Marshal.WriteInt32(ptr, 8, Order.ProductCode);
+                Marshal.WriteInt32(ptr, 12, (byte)Order.OrderMode);
+                Marshal.WriteInt32(ptr, 16, (int)(Order.Quantity * 1000));
+                Marshal.WriteInt32(ptr, 20, (int)(Order.Price * 100));
+                Marshal.WriteInt32(ptr, 24, (int)(Order.Amount * 100));
+                Marshal.WriteIntPtr(ptr, 28, Marshal.StringToHGlobalAnsi(Order.CardNO));
+                Marshal.WriteIntPtr(ptr, 32, Marshal.StringToHGlobalAnsi(Order.OrderRRN));
+            }
+            public static void ReadOrderFromIntPtr(RemotePump_Driver.OrderInfo Order, IntPtr ptr)
+            {
+                Marshal.WriteInt32(ptr, 0, Order.PumpNo);
+                Marshal.WriteInt32(ptr, 4, Order.PaymentCode);
+                Marshal.WriteInt32(ptr, 8, Order.ProductCode);
+                Marshal.WriteInt32(ptr, 12, (byte)Order.OrderMode);
+                Marshal.WriteInt32(ptr, 16, (int)(Order.Quantity * 1000));
+                Marshal.WriteInt32(ptr, 20, (int)(Order.Price * 100));
+                Marshal.WriteInt32(ptr, 24, (int)(Order.Amount * 100));
+                Marshal.WriteIntPtr(ptr, 28, Marshal.StringToHGlobalAnsi(Order.CardNO));
+                Marshal.WriteIntPtr(ptr, 32, Marshal.StringToHGlobalAnsi(Order.OrderRRN));
+            }
+
+            public struct FuelInfo
+            {
+                public int ID;
+                public int InternalCode;
+                public string Name;
+                public decimal Price;
+                public override string ToString() => $"ID = {ID:00}, InternalCode = {InternalCode:00}, Name = {Name}, Price = {Price:0.00}р";
 
             }
 
-            private int connectionTimeout = 10;
-            private bool goldCard = false;
-            private int goldCardDisc = 600;
+            public struct PumpInfo
+            {
+                public int Pump;
+#warning В случае если на ТРК два продукта с одинаковым внешним кодом будет полная хрень!!!
+                public Dictionary<string, FuelInfo> Fuels;
+            }
 
-            private bool silverCard = false;
-            private int silverCardDisc = 500;
+            public static Dictionary<string, FuelInfo> Fuels = new Dictionary<string, FuelInfo>();
 
-            private bool platinumCard = false;
-            private int platinumCardDisc = 500;
-            string cardNum = "0";
+            public static Dictionary<int, PumpInfo> Pumps = new Dictionary<int, PumpInfo>();
+            static bool isInit = false;
+            #endregion
+            public static string SystemName { get; private set; } = "Unknown";
+
+            #region Экспортируемые драйвером функции
+            /// <summary>Функция  загрузки драйвера для АСУ Сервио</summary>
+            /// <param name="callback">Ссылка на функцию обратного вызова для установки заказа на ТРК</param>
+            /// <param name="ctx"></param>
+            /// <returns>1 - при успешной загрузке, </returns>
+            [System.Reflection.Obfuscation()]
+            public static byte Open_Servio(SetDose_Delegate _callback_SetDose,
+                GetDose_Delegate _callback_GetDose,
+                SQL_Write_Delegate _callback_SQL_Write,
+                SQL_Read_Delegate _callback_SQL_Read,
+                CancelDose_Delegate _callback_CancelDose,
+                HoldPump_Delegate _callback_HoldPump,
+                IntPtr ctx)
+            => OpenBase(_callback_SetDose, _callback_GetDose, _callback_SQL_Write, _callback_SQL_Read, _callback_CancelDose, _callback_HoldPump, null, null, null, "Servio Pump GAS 2.67+", ctx);
+
+            public static byte OpenBase(SetDose_Delegate _callback_SetDose,
+                                        GetDose_Delegate _callback_GetDose,
+                                        SQL_Write_Delegate _callback_SQL_Write,
+                                        SQL_Read_Delegate _callback_SQL_Read,
+                                        CancelDose_Delegate _callback_CancelDose,
+                                        HoldPump_Delegate _callback_HoldPump,
+
+                                        UpdateFillingOver_Delegate _callback_UpdateFillingOver,
+                                        InsertCardInfo_Delegate _callback_InsertCardInfo,
+                                        SaveReciept_Delegate _callback_SaveReciept,
+                                        string _SystemName,
+                                        IntPtr ctx)
+            {
+                try
+                {
+
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                }
+                catch { }
+                try
+                {
+                    if (ConfigMemory.GetConfigMemory("Benzuber")["enable"] == "true")
+                        BenzuberServer.Excange.StartClient();
+
+                    log.Write("");
+                    SystemName = _SystemName;
+                    log.Write($"Драйвер открыт. Система управления: \"{SystemName ?? "Нет данных"}\"");
+
+
+
+                    log.Write("callback_SQL_Write ".PadLeft(37) + ((_callback_SQL_Write == null) ? "is null" : "success set"));
+                    if (_callback_SQL_Write != null) callback_SQL_Write_callback = _callback_SQL_Write;
+
+                    log.Write("callback_SQL_Read ".PadLeft(37) + ((_callback_SQL_Read == null) ? "is null" : "success set"));
+                    if (_callback_SQL_Read != null) callback_SQL_Read_callback = _callback_SQL_Read;
+
+
+                    log.Write("callback_UpdateFillingOver ".PadLeft(37) + ((_callback_UpdateFillingOver == null) ? "is null" : "success set"));
+                    if (_callback_UpdateFillingOver != null) UpdateFillingOver_callback = _callback_UpdateFillingOver;
+
+                    log.Write("callback_InsertCardInfo ".PadLeft(37) + ((_callback_InsertCardInfo == null) ? "is null" : "success set"));
+                    if (_callback_InsertCardInfo != null) InsertCardInfo_callback = _callback_InsertCardInfo;
+
+                    log.Write("callback_SaveReciept ".PadLeft(37) + ((_callback_SaveReciept == null) ? "is null" : "success set"));
+                    if (_callback_SaveReciept != null) SaveReciept_callback = _callback_SaveReciept;
+
+                    log.Write("callback_SetDose ".PadLeft(37) + ((_callback_SetDose == null) ? "is null" : "success set"));
+                    if (_callback_SetDose != null) callback_SetDose_callback = _callback_SetDose;
+
+                    log.Write("callback_GetDose ".PadLeft(37) + ((_callback_GetDose == null) ? "is null" : "success set"));
+                    if (_callback_GetDose != null) callback_GetDose_callback = _callback_GetDose;
+
+
+
+                    log.Write("callback_CancelDose ".PadLeft(37) + ((_callback_CancelDose == null) ? "is null" : "success set"));
+                    if (_callback_CancelDose != null) callback_CancelDose_callback = _callback_CancelDose;
+
+                    log.Write("callback_HoldPump ".PadLeft(37) + ((_callback_HoldPump == null) ? "is null" : "success set"));
+                    if (_callback_HoldPump != null) callback_HoldPump_callback = _callback_HoldPump;
+
+                    try
+                    {
+                        Params = Serialization.Deserialize<Serialization.SerializableDictionary<string, string>>("SmartPumpControlParams.xml");
+                    }
+                    catch
+                    {
+                    }
+                    if (Params == null)
+                        Params = new Serialization.SerializableDictionary<string, string>();
+                    log.Write("ctx " + (((ctx == null) || (ctx == IntPtr.Zero)) ? "is null" : "success set"));
+                    Driver.ctx = ctx;
+                    if (!isInit)
+                    {
+                        try
+                        {
+                            isInit = true;
+                            int port;
+                            if (!Params.ContainsKey("port") || !int.TryParse(Params["port"], out port))
+                                port = 1111;
+
+                            RemotePump_Driver.RemotePump.StartServer(port);
+                            log.Write($"Open port: {port}");
+                        }
+                        catch { isInit = false; }
+                    }
+                    return 1;
+                }
+                catch (Exception ex)
+                {
+                    log.Write("Ошибка при открытии драйвера. " + ex.Message);
+                    return 0;
+                }
+
+            }
+            //static TestWindow window;
 
             /// <summary>
-            /// Таймаут ожидания подключения терминала в секундах. 
-            /// По умолчанию = 5 сек.
+            /// Инициализация драйвера
             /// </summary>
-            public int ConnectionTimeout
+            /// <param name="_callback_SetDose">Адрес функции установки дозы на ТРК</param>
+            /// <param name="_callback_GetDose">Адрес функции получения информации о ТРК</param>
+            /// <param name="_callback_CancelDose">Адрес функции сброса с ТРК</param>
+            /// <param name="_callback_HoldPump">Адрес функции проверки доступности ТРК</param>
+            /// <param name="_callback_UpdateFillingOver">Адрес функции сохранения информации после пересчата завершенного заказа</param>
+            /// <param name="_callback_InsertCardInfo">Адрес функции сохранения информации о доп. картах клиена</param>
+            /// <param name="_callback_SaveReciept">Адрес функции сохранения информации о напечатанном документе</param>
+            /// <param name="_SystemName">Информация о системе управления АЗС</param>
+            /// <param name="ctx">Произвольныый объект, который будет возвращаться при каждом вызове callback функций</param>
+            /// <returns></returns>
+            [System.Reflection.Obfuscation()]
+            public static byte Open(SetDose_Delegate _callback_SetDose,
+                                      GetDose_Delegate _callback_GetDose,
+                                      CancelDose_Delegate _callback_CancelDose,
+                                      HoldPump_Delegate _callback_HoldPump,
+                                      UpdateFillingOver_Delegate _callback_UpdateFillingOver,
+                                      InsertCardInfo_Delegate _callback_InsertCardInfo,
+                                      SaveReciept_Delegate _callback_SaveReciept,
+                                      string _SystemName,
+                                      IntPtr ctx)
+                => OpenBase(_callback_SetDose, _callback_GetDose, null, null, _callback_CancelDose, _callback_HoldPump, _callback_UpdateFillingOver, _callback_InsertCardInfo, _callback_SaveReciept, _SystemName, ctx);
+
+            //static TestWindow window;
+
+            /// <summary>Функция выгрузки драйвера</summary>
+            [System.Reflection.Obfuscation()]
+            public static void Close()
+            {
+                log.Write("");
+                log.Write("Driver close");
+                //try
+                //{
+                //    if (window != null && window.Visible)
+                //        window.Close();
+                //}
+                //catch { }
+            }
+
+            /// <summary>
+            /// Получение строки описания драйвера
+            /// </summary>
+            /// <returns>Строка описания драйвера</returns>
+            [System.Reflection.Obfuscation()]
+            public static string Description()
+            {
+                log.Write("");
+                log.Write("Description");
+                return "SmartPumpControl Driver";
+            }
+
+            /// <summary>
+            /// Завершение транзакции.
+            /// </summary>
+            /// <param name="TransNum">номер транзакции</param>
+            /// <param name="Quantity">Фактическое кол-во литров в миллилитрах</param>
+            /// <param name="Amount">Фактическая сумма заказа в копейках</param>
+            [System.Reflection.Obfuscation()]
+            public static void FillingOver(long TransNum, int Quantity, int Amount)
+            {
+                try
+                {
+                    lock (TransMemory)
+                    {
+                        log.Write("");
+                        log.Write(string.Format("Налив окончен: Номер транзакции АСУ = {0}, Кол-во = {1}, Amount = {2}", TransNum, Quantity, Amount));
+                        if (TransMemory.ContainsKey(TransNum))
+                        {
+                            var order = TransMemory[TransNum];
+                            order.OverAmount = ((decimal)Amount) / 100;
+                            order.OverQuantity = ((decimal)Quantity) / 1000;
+                            order.PumpRRN = TransNum.ToString();
+                            RemotePump_Driver.RemotePump.AddFillingOver(order);
+
+                            #warning Если возникнут проблеммы убрать
+                            TransMemory.Remove(TransNum);
+                        }
+                    }
+
+                    //   var tmp = TelFuelCommon.Excange.TransMemory.GetTransByStationTag(TransNum);
+                    //   tmp.OverAmount = (((decimal)Amount) / 100);
+                    //   tmp.Quantity = (((decimal)Quantity) / 100);
+                    //   tmp.State = TelFuelCommon.Excange.TransMemory.StateEnum.Commited;
+                }
+                catch (Exception ex)
+                {
+                    log.Write("Ошибка подтверждения налива топлива. " + ex.Message);
+                }
+            }
+
+            /// <summary>
+            /// Получить список видов оплаты
+            /// </summary>
+            /// <returns></returns>
+            [System.Reflection.Obfuscation]
+            public static string GetCardTypes()
+            {
+                if (!Params.ContainsKey("CardType"))
+                {
+                    Params.Add("CardType", ";10=Наличные;20=Топливные карты;30=Банковские карты;99=Benzuber");
+                    SaveParams();
+                }
+                return Params["CardType"];//"; 1 = Наличные; 2 = Топливные карты; 3 = Банковские карты; 4 = Дисконтные карты";// Params["CardType"];
+            }
+
+
+            public static int ServiceOperationTimeout
             {
                 get
                 {
-                    return connectionTimeout / 2;
+                    int result = 0;
+                    if (Params.ContainsKey("service_operation_timeout") && int.TryParse(Params["service_operation_timeout"], out result))
+                        return result;
+                    else
+                        return 300;
+
                 }
+
                 set
                 {
-                    connectionTimeout = value * 2;
+
+                    Params["service_operation_timeout"] = value.ToString();
+                    SaveParams();
                 }
             }
 
-
-            #region Перечисления
-            /// <summary>
-            /// Тип операции
-            /// </summary>
-            public enum OpType
+            public static Serialization.SerializableDictionary<string, string> Params = new Serialization.SerializableDictionary<string, string>();
+            public static void SaveParams()
             {
-                /// <summary>
-                /// Продажа
-                /// </summary>
-                Debit = 1,
-                /// <summary>
-                /// Возврат
-                /// </summary>
-                Return = 2,
-            };
-
-            /// <summary>
-            /// Служебные символы протокола.
-            /// </summary>
-            private enum STX : byte
-            {
-                STX = 0x02,
-                ETX = 0x03,
-                EOT = 0x04,
-                ENQ = 0x05,
-                ACK = 0x06,
-                BEL = 0x07,
-                NAK = 0x15,
-                ETB = 0x17,
-            };
-            #endregion
-
-            #region Глобальные переменные
-            private byte[] memReciveData = new byte[0];
-            private int timeout = 10000;
-            private int LocalPort;
-            private ProjectSummer.Repository.Logger log;
-            private ProjectSummer.Repository.Logger obmen;
-            TcpListener Listener;
-            Socket ClientSock;
-            /// <summary>
-            /// Проводить операцию, даже если скидка равно 0. 
-            /// </summary>
-            public bool ZeroDiscontEnable = false;
-            /// <summary>
-            /// Принудительное завершение обмена с терминалом.
-            /// </summary>
-            public bool cancel = false;
-            #endregion
-
-            /// <summary>
-            /// Закрытиие сервера обмена с терминалом
-            /// </summary>
-            public void Close()
-            {
-                log.Write("Закрытиие сервера обмена с терминалом", 100);
                 try
                 {
-                    Listener.Stop();
+                    Serialization.Serialize(Params, "SmartPumpControlParams.xml");
                 }
-                catch { }
+                catch (Exception ex) { MessageBox.Show(ex.Message); }
+            }
+
+
+            /// <summary>
+            /// Закрытие смены АСУ
+            /// </summary>
+            [System.Reflection.Obfuscation()]
+            public static void CloseShift()
+            {
+                log.Write("");
+                log.Write("Закрытие смены");
+                var tids = SmartPumpControlRemote.Shell.GetTIDS();
+                foreach (var tid in tids)
+                {
+                    if (SmartPumpControlRemote.Shell.GetActions(tid).Contains("Закрытие смены"))
+                    {
+                        var message = "Выполнить закрытие смены на\r\nтерминале: \"" + tid + "\"?";
+                        if (MessageBox.Show(message, "Закрытие смены на терминале", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                            SmartPumpControlRemote.Shell.RunAction("Закрытие смены", tid);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Открытие окна "обслуживание драйвера"
+            /// </summary>
+            [System.Reflection.Obfuscation()]
+            public static void Service()
+            {
+                log.Write("");
+                log.Write("Service");
+                var dialog = new SmartPumpControlRemote.QuickLaunch();
+                if (dialog.tid != "") dialog.ShowDialog();
+            }
+
+            /// <summary>
+            /// Открытие окна "Настроек драйвера"
+            /// </summary>
+            [System.Reflection.Obfuscation()]
+            public static void Settings()
+            {
+                //log.Write(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                log.Write("");
+                log.Write("Settings");
+                new SmartPumpControlRemote.Settings().ShowDialog();
+            }
+
+            /// <summary>
+            /// Установка информации по видам топлива
+            /// </summary>
+            /// <param name="Fuels">
+            /// Строка с информацией по видам топлива в формате
+            /// </param>
+            [System.Reflection.Obfuscation()]
+            public static void FuelPrices(string Fuels)
+            {
+                log.Write("");
+                log.Write("Установка цен: " + Fuels);
                 try
                 {
-                    ClientSock.Close();
+                    log.Write("Очистка памяти цен.");
+                    Driver.Fuels.Clear();
+                    var fuelsArr = Fuels.Split(';');
+                    log.Write("Формирование списка доступных продуктов");
+                    foreach (var fuel in fuelsArr)
+                    {
+                        var tmpData = fuel.Split('=');
+                        if (tmpData.Length == 4)
+                        {
+
+                            int ID = 0;
+                            int Code = 0;
+                            string Name = tmpData[1];
+                            decimal Price = 0;
+                            if (int.TryParse(tmpData[0].Trim(), out ID)
+                                && decimal.TryParse(tmpData[2].Trim().Replace('.', ','), out Price)
+                                && int.TryParse(tmpData[3].Trim(), out Code))
+                            {
+                                //if(!int.TryParse(TelFuelCommon.Excange.conf.GetValue("Fuels", ID.ToString()), out Code))
+                                //{
+                                //    if (Name.Contains("98")) Code = 98;
+                                //    else if (Name.Contains("95")) Code = 95;
+                                //    else if (Name.Contains("92")) Code = 92;
+                                //    else if (Name.Contains("80") || Name.Contains("76")) Code = 80;
+                                //    else if (Name.ToLower().Contains("дт") || Name.ToLower().Contains("dt")) Code = 50;
+                                //}
+                                var tmp = new FuelInfo() { ID = ID, Name = Name, Price = Price, InternalCode = Code };
+                                log.Write("Add Fuel: " + tmp.ToString());
+                                Driver.Fuels.Add(Name, tmp);
+                            }
+
+                        }
+                    }
                 }
                 catch { }
-                return;
             }
 
             /// <summary>
-            /// Принудительное завершение обмена с терминалом.
+            /// Получить информацию о транзакции
             /// </summary>
-            public void CancelDebit()
+            /// <param name="ID">ID транзакции</param>
+            /// <param name="Result">Структура содержащая информацию о транзакции:
+            ///         
+            //struct GetTransactionResult
+            //{
+            //    public int PumpNo;
+            //    public int PaymentCode;
+            //    public int ProductCode;
+            //    public int OrderMode;
+            //    public int Quantity;
+            //    public int Price;
+            //    public int Amount;
+            //    [MarshalAs(UnmanagedType.AnsiBStr)]
+            //    public string CardNO;
+            //    [MarshalAs(UnmanagedType.AnsiBStr)]
+            //    public string OrderRRN;
+            //}
+            /// </param>
+            /// <returns></returns>
+            [System.Reflection.Obfuscation]
+            public static int GetTransaction(long ID, IntPtr Result)
             {
-                cancel = true;
-            }
-
-            /// <summary>
-            /// Функция выполнения дебита клиента.
-            /// </summary>
-            /// <param name="port">Порт через который происходит обмен с терминалом</param>
-            /// <param name="Price">Цена</param>
-            /// <param name="Amount">Сумма</param>
-            /// <param name="Quantity">Кол-во</param>
-            /// <param name="GoodCode">Код продукта в системе BonusPlus</param>
-            /// <param name="GoodName">Наименование продукта. 
-            /// Для получения скидки, без проведения операции дебита, необходимо передать "discount".</param>
-            /// <param name="withDiscount">Фиксирование суммы заказа</param>
-            /// <param name="BpRRN">Возвращаемый параметр. Номер транзакции.</param>
-            /// <param name="Discount">Возвращаемый параметр. Скидка.</param>
-            /// <param name="RespCode">Возвращаемый параметр.Код ответа от терминала.</param>
-            /// <param name="ScreenMsg">Возвращаемый параметр.Текст экранного сообщения терминала.</param>
-            /// <returns>Результат выполнения функции</returns>
-            public bool StartDebit(int port, uint Price, uint Amount, uint Quantity,
-                string GoodCode, string GoodName, bool withDiscount, out byte[] BpRRN, out int Discount,
-                out int RespCode, out string ScreenMsg)
-            {
-
-                if ((GoodName == "discount") || (GoodCode == "discount"))
+                try
                 {
-                    GoodName = "discount";
-                    GoodCode = "discount";
+                    log.Write(string.Format("GetTransaction(long ID = {0},  IntPtr Result):\r\n", ID));
+                    lock (TransMemory)
+                    {
+                        if (TransMemory.ContainsKey(ID))
+                        {
+                            log.Write("Транзакция найдена");
+                            //   Marshal.StructureToPtr(TransMemory[ID], Result, true);
+                            WriteOrderToIntPtr(TransMemory[ID], Result);
+                            //TransMemory[ID].WriteToIntPtr(Result);
+                            return 1;
+                        }
+                        else
+                        {
+                            log.Write("Транзакция не найдена");
+                            foreach (var key in TransMemory.Keys)
+                                log.Write(key.ToString());
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.Write(string.Format("GetTransaction(long ID = {0},  IntPtr Result):\r\n", ID) + ex.ToString());
+                }
+                return 0;
+
+            }
+            public static TransactionInfo GetTransactionInfo(long ID, IntPtr Result)
+            {
+                TransactionInfo result = new TransactionInfo();
+                try
+                {
+                    log.Write(string.Format("GetTransactionInfo(long ID = {0}):\r\n", ID));
+                    lock (TransMemory)
+                    {
+                        if (TransMemory.ContainsKey(ID))
+                        {
+                            log.Write("Транзакция найдена");
+                            //   Marshal.StructureToPtr(TransMemory[ID], Result, true);
+                            //ReadOrderFromIntPtr(TransMemory[ID], Result);
+                            
+                            result.Pump = Marshal.ReadInt32(Result, 0);
+                            result.PaymentCode = Marshal.ReadInt32(Result, 4);
+                            result.Fuel = Marshal.ReadInt32(Result, 8);
+                            result.OrderInMoney = Marshal.ReadInt32(Result, 12);
+                            result.Quantity = Marshal.ReadInt32(Result, 16);
+                            result.Price = Marshal.ReadInt32(Result, 20);
+                            result.Amount = Marshal.ReadInt32(Result, 24);
+                            result.CardNum = Marshal.PtrToStringAnsi(Result, 28);
+                            result.RRN = Marshal.PtrToStringAnsi(Result, 32);
+                            //result.BillImage = Marshal.WriteIntPtr(ptr, 32;
+                            //TransMemory[ID].WriteToIntPtr(Result);
+                            return result;
+                        }
+                        else
+                        {
+                            log.Write("Транзакция не найдена");
+                            foreach (var key in TransMemory.Keys)
+                                log.Write(key.ToString());
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.Write(string.Format("GetTransaction(long ID = {0},  IntPtr Result):\r\n", ID) + ex.ToString());
+                }
+                return null;
+
+            }
+
+            /// <summary>
+            /// Установка информации по видам топлива доступным на ТРК
+            /// </summary>
+            /// <param name="PumpsInfo">
+            /// Строка с информацией по видам топлива доступным на ТРК в формате:
+            /// Pump=FuelCode,FuelCode,FuelCode;
+            /// Пример:
+            /// 1=1,2,3; 2=1,2,3; 3=2,3; 4=2,3
+            /// </param>
+            [System.Reflection.Obfuscation()]
+            public static void PumpFuels(string PumpsInfo)
+            {
+                log.Write("");
+                log.Write("Установка продуктов, доступных на ТРК.");
+                log.Write("Получена строка от АСУ АЗС: " + PumpsInfo);
+                try
+                {
+                    Pumps.Clear();
+                    var pumpsArr = PumpsInfo.Split(';');
+                    foreach (var pump in pumpsArr)
+                    {
+                        int pumpNum = 0;
+                        var tmpArr = pump.Split('=');
+                        if ((tmpArr.Length == 2) && (int.TryParse(tmpArr[0].Trim(), out pumpNum)))
+                        {
+                            log.Write("ТРК: " + pumpNum.ToString());
+
+                            Pumps.Add(pumpNum, new PumpInfo() { Pump = pumpNum, Fuels = new Dictionary<string, FuelInfo>() });
+                            var f_tmpArr = tmpArr[1].Split(',');
+                            foreach (var f in f_tmpArr)
+                            {
+                                int f_int = 0;
+                                if (int.TryParse(f.Trim(), out f_int))
+                                {
+                                    var fuel = (from _fuel in Fuels where _fuel.Value.ID == f_int select _fuel.Value).ToArray();
+                                    if (fuel.Length > 0)
+                                    {
+                                        log.Write("Продукт: " + fuel[0].ToString());
+                                        Pumps[pumpNum].Fuels.Add(fuel[0].Name, fuel[0]);
+                                    }
+
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+            }
+
+            private static bool init_cr([MarshalAs(UnmanagedType.BStr)]string Name, bool retry = false)
+            {
+                var config = ConfigMemory.GetConfigMemory(Name);
+                try
+                {
+                    var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                    config["name"] = proxy.RequestData("cashregister", "devicename");
+                    config["serial"] = proxy.RequestData("cashregister", "serialnumber");
+                    config.Save();
+                    return config["serial"] != null && config["serial"] != "";
+                }
+                catch { }
+                return false;
+            }
+
+            [System.Reflection.Obfuscation()]
+            static public byte CRCommTest([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                return (byte)(init_cr(Name, true) ? 1 : 0);
+            }
+            [System.Reflection.Obfuscation()]
+            static public byte CRService([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                System.Windows.Forms.MessageBox.Show("Используйте функцию \"Сервис\" терминала.", Name, System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                return 1;
+            }
+            [System.Reflection.Obfuscation()]
+            static public byte CRSetup([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                var dialog = new IP_Request();
+                var config = ConfigMemory.GetConfigMemory(Name);
+                dialog.Value = config["ip"];
+                dialog.Text = "Параметры \"" + Name + "\"";
+                if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    //System.Windows.Forms.MessageBox.Show(Name + " Setup");
+                    if (!dialog.Value.Contains("://"))
+                        dialog.Value = "net.tcp://" + dialog.Value + ":1120";
+                    config["ip"] = dialog.Value;
+                    config.Save();
+                }
+                return 1;
+            }
+
+            [System.Reflection.Obfuscation()]
+            static public byte XReport([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                var config = ConfigMemory.GetConfigMemory(Name);
+                if (init_cr(Name))
+                {
+                    new Task(() =>
+                    {
+                        try
+                        {
+                            var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                            proxy.RunCommand(config["name"], "X-отчет (без печати)", null);
+                        }
+                        catch { }
+                    }).Start();
+                }
+                return 1;
+            }
+            [System.Reflection.Obfuscation()]
+            static public int GetCheckNumber([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                var config = ConfigMemory.GetConfigMemory(Name);
+                try
+                {
+                    init_cr(Name);
+                    var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                    return int.Parse(proxy.RequestData("cashregister", "checkno"));
+                }
+                catch { }
+                return 0;
+            }
+            [System.Reflection.Obfuscation()]
+            static public byte CRCloseShift([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                var config = ConfigMemory.GetConfigMemory(Name);
+                if (init_cr(Name))
+                {
+                    byte result = 0;
+                    do
+                    {
+                        try
+                        {
+                            var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                            result = (byte)(proxy.RunCommand(config["name"], "Z - отчет (Без печати)", null) ? 1 : 0);
+                        }
+                        catch { }
+                        var message = "Не удалось закрыть смену закрыть смену на фискальном\r\nрегистраторе: \"" + Name + "\"\r\nПовторить попытку закрытия смены?";
+                        if (result == 0 && MessageBox.Show(message, "Закрытие смены на ККМ", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+                            break;
+                    }
+                    while (result == 0);
+                    return result;
                 }
                 else
-                {
-                    GoodName = "1";
-                    GoodCode = "1";
-                }
-
-                /////////////////////////////////////////////
-                withDiscount = true;/////////////////////////
-                                    /////////////////////////////////////////////
-
-                cancel = false;
-                RespCode = 0;
-                ScreenMsg = ".";
-                Discount = 0;
-                if (goldCard)
-                {
-                    Discount = goldCardDisc;
-                    string disc_str = Discount.ToString();
-                    if (disc_str.Length > 2)
-                        disc_str = disc_str.Insert(disc_str.Length - 2, ".");
-                    ScreenMsg = string.Format("\r\nERGO LOYALTY GOLD\r\nТекущий % скидки: {0}", disc_str);
-                }
-                if (silverCard)
-                {
-                    Discount = silverCardDisc;
-                    string disc_str = Discount.ToString();
-                    if (disc_str.Length > 2)
-                        disc_str = disc_str.Insert(disc_str.Length - 2, ".");
-                    ScreenMsg = string.Format("\r\nERGO LOYALTY SILVER\r\nТекущий % скидки: {0}", disc_str);
-                }
-                if (platinumCard)
-                {
-                    Discount = platinumCardDisc;
-                    string disc_str = Discount.ToString();
-                    if (disc_str.Length > 2)
-                        disc_str = disc_str.Insert(disc_str.Length - 2, ".");
-                    ScreenMsg = string.Format("\r\nERGO LOYALTY PLATINUM\r\nТекущий % скидки: {0}", disc_str);
-                }
-
-                log.Write("Запуск сервера обмена с терминалом для выполнения дебита", 100);
-
-                LocalPort = port;
-                Listener = new TcpListener(LocalPort);
-                Listener.Start();
-                log.Write(string.Format("Открыт порт: {0}", port), 100);
-                BpRRN = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
+                    return 0;
+            }
+            [System.Reflection.Obfuscation()]
+            static public string GetSerialNumber([MarshalAs(UnmanagedType.BStr)]string Name)
+            {
+                init_cr(Name);
+                var config = ConfigMemory.GetConfigMemory(Name);
+                return config["serial"];
+            }
+            [Obfuscation()]
+            static public byte CRMoneyIn([MarshalAs(UnmanagedType.BStr)]string Name, double Sum)
+            {
+                var result = 0;
+                var operation = "Внесение";
+                var config = ConfigMemory.GetConfigMemory(Name);
                 try
                 {
-                    int z = 0;
-                    for (z = 0; (!Listener.Pending()); z++)
-                    {
-                        Thread.Sleep(500);
-                        if (z == connectionTimeout || cancel)
-                        {
-                            log.Write("Очередь запросов на подключение к серверу пуста.", 100);
-                            return false;
-                        }
-                    }
-                    log.Write("Ожидание входящего подключения", 100);
-                    ClientSock = Listener.AcceptSocket();
-
+                    var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                    var param = new Dictionary<string, string>();
+                    param.Add("Выбор операции", operation);
+                    param.Add("Введите сумму в копейках", ((int)(Math.Round(Sum * 100))).ToString());
+                    result = (byte)(proxy.RunCommand(config["name"], "Внесение/выплата денег", param) ? 1 : 0);
                 }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                    log.Write("Ошибка ожидания входящего подключения", 100);
-                    return false;
-                }
+                catch { }
 
-                if (ClientSock.Connected)
-                {
-                    log.Write("Подключен клиент", 100);
-                    try
-                    {
-                        log.Write("Выполнение дебита клиента.");
-                        log.Write(string.Format("Код продукта: {0}, Наименование продукта: {1}.",
-                            GoodCode, GoodName));
-                        log.Write(string.Format("Кол-во: {0}, Цена: {1}, Сумма: {2}.",
-                            Quantity, Price, Amount));
+                if (result == 0)
+                    System.Windows.Forms.MessageBox.Show("Не удалось выполнить операцию", operation, System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
 
-                        bool res = Debit(Price, Amount, Quantity, GoodCode, GoodName, withDiscount,
-                            out BpRRN, out Discount, out RespCode, out ScreenMsg);
-                        if (goldCard)
-                        {
-                            Discount = goldCardDisc;
-                            string disc_str = Discount.ToString();
-                            if (disc_str.Length > 2)
-                                disc_str = disc_str.Insert(disc_str.Length - 2, ".");
-                            ScreenMsg = string.Format("\r\nERGO LOYALTY GOLD\r\nТекущий % скидки: {0}", disc_str);
-
-                        }
-                        if (silverCard)
-                        {
-                            Discount = silverCardDisc;
-                            string disc_str = Discount.ToString();
-                            if (disc_str.Length > 2)
-                                disc_str = disc_str.Insert(disc_str.Length - 2, ".");
-                            ScreenMsg = string.Format("\r\nERGO LOYALTY SILVER\r\nТекущий % скидки: {0}", disc_str);
-                        }
-                        if (platinumCard)
-                        {
-                            Discount = platinumCardDisc;
-                            string disc_str = Discount.ToString();
-                            if (disc_str.Length > 2)
-                                disc_str = disc_str.Insert(disc_str.Length - 2, ".");
-                            ScreenMsg = string.Format("\r\nERGO LOYALTY PLATINUM\r\nТекущий % скидки: {0}", disc_str);
-                        }
-
-
-                        try
-                        {
-                            ClientSock.Close();
-                            Listener.Stop();
-                        }
-                        catch { }
-
-                        if (conf["InfoAfterPayment"] == "true" && GoodCode != "discount" && !goldCard && !silverCard && !platinumCard)
-                        {
-                            Thread.Sleep(2000);
-                            byte[] BpRRN_Post;
-                            int Discount_Post = 0;
-                            int RespCode_Post = 0;
-                            string ScreenMsg_Post = "";
-                            SetCardNum(cardNum);
-                            if (StartDebit(port, Price, Amount, Quantity, "discount", "discount", withDiscount, out BpRRN_Post,
-                                out Discount_Post, out RespCode_Post, out ScreenMsg_Post))
-                            {
-                                ScreenMsg = "ИНФО ДО ПЛАТЕЖА:\r\n" + ScreenMsg
-                                    + "\r\nИНФО ПОСЛЕ ПЛАТЕЖА:" + ScreenMsg_Post;
-                            }
-                        }
-
-                        goldCard = false;
-                        silverCard = false;
-                        platinumCard = false;
-                        return res;
-                    }
-                    catch (Exception e)
-                    {
-                        log.Write(e.ToString(), 100);
-                        log.Write("Ошибка выполнения дебита клиента.");
-                        ClientSock.Close();
-                        Listener.Stop();
-                    }
-                }
-                goldCard = false;
-                silverCard = false;
-                platinumCard = false;
-                return false;
+                return (byte)result;
             }
 
-            /// <summary>
-            /// Функция выполнения возврата.
-            /// </summary>
-            /// <param name="port">Порт через который происходит обмен с терминалом</param>
-            /// <param name="Amount">Сумма</param>
-            /// <param name="BpRRN">Номер транзакции.</param>
-            /// <param name="RespCode">Возвращаемый параметр. Код ответа от терминала.</param>
-            /// <returns></returns>
-            public bool StartCredit(int port, uint Amount, byte[] BpRRN, out int RespCode)
-            {
-                goldCard = false;
-                silverCard = false;
-                platinumCard = false;
-                cancel = false;
-                RespCode = 0;
-                log.Write("Запуск сервера обмена с терминалом для выполнения возврата", 100);
-                LocalPort = port;
-                Listener = new TcpListener(LocalPort);
-                Listener.Start();
 
+            [Obfuscation()]
+            static public byte CRMoneyOut([MarshalAs(UnmanagedType.BStr)]string Name, double Sum)
+            {
+                var result = 0;
+                var operation = "Выплата";
+                var config = ConfigMemory.GetConfigMemory(Name);
                 try
                 {
-                    int z = 0;
-                    for (z = 0; (!Listener.Pending()); z++)
-                    {
-                        Thread.Sleep(500);
-                        if (z == connectionTimeout || cancel)
-                        {
-                            log.Write("Очередь запросов на подключение к серверу пуста.", 100);
-                            return false;
-                        }
-                    }
-                    log.Write("Ожидание входящего подключения", 100);
-                    ClientSock = Listener.AcceptSocket();
-
+                    var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                    var param = new Dictionary<string, string>();
+                    param.Add("Выбор операции", operation);
+                    param.Add("Введите сумму в копейках", ((int)(Math.Round(Sum * 100))).ToString());
+                    result = (byte)(proxy.RunCommand(config["name"], "Внесение/выплата денег", param) ? 1 : 0);
                 }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                    log.Write("Ошибка ожидания входящего подключения", 100);
-                    return false;
-                }
+                catch { }
 
-                if (ClientSock.Connected)
-                {
-                    log.Write("Подключен клиент", 100);
-                    try
-                    {
-                        log.Write("Выполнение возврата клиенту.");
-                        log.Write(string.Format("Сумма: {0}, Номер транзакции: {1},",
-                            Amount, BitConverter.ToString(BpRRN)));
-                        return Credit(Amount, BpRRN, out RespCode);
-                    }
-                    catch (Exception e)
-                    {
-                        log.Write(e.ToString(), 100);
-                        ClientSock.Close();
-                        Listener.Stop();
-                    }
-                }
-                return false;
+                if (result == 0)
+                    System.Windows.Forms.MessageBox.Show("Не удалось выполнить операцию", operation, System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+
+                return (byte)result;
             }
-
-
-            /// <summary>
-            /// Функция передачи номера карты эмулятору терминала
-            /// </summary>
-            /// <param name="CardNum">Номер карты</param>
-            /// <returns></returns>
-            public bool SetCardNum(string CardNum)
+            [System.Reflection.Obfuscation()]
+            static public byte PrintCheck([MarshalAs(UnmanagedType.BStr)]string Name, [MarshalAs(UnmanagedType.BStr)]string Text, int CheckKind, int PayKind, double Amount)
             {
-                bool tmp = false;
-                return SetCardNum(CardNum, out tmp);
-            }
-
-            /// <summary>
-            /// Функция передачи номера карты эмулятору терминала
-            /// </summary>
-            /// <param name="CardNum">Номер карты</param>
-            /// <param name="CardValid">Выходной параметр. Состояниее валидации карты.</param>
-            /// <returns></returns>
-            public bool SetCardNum(string CardNum, out bool CardValid)
-            {
-                // bool tmp = false;
-                int num_disc = 300;
-                return SetCardNum(CardNum, out CardValid, out num_disc);
-            }
-
-            /// <summary>
-            /// Функция передачи номера карты эмулятору терминала
-            /// </summary>
-            /// <param name="CardNum">Номер карты</param>
-            /// <param name="CardValid">Выходной параметр. Состояниее валидации карты.</param>
-            /// <returns></returns>
-            public bool SetCardNum(string CardNum, out bool CardValid, out int num_disc)
-            {
-                CardValid = false;
-                cardNum = CardNum;
-                num_disc = 0;
+                log.WriteFormated("Печать чека. {0}, {1}, {2}, {3}", Name, CheckKind, PayKind, Amount);
+                var config = ConfigMemory.GetConfigMemory(Name);
+                var result = 0;
                 try
                 {
-                    if (!CardNum.StartsWith(conf["CardPrefix"]))
+                    init_cr(Name);
+                    if (CheckKind == 6 || CheckKind == 4 || CheckKind == 3)
                     {
+                        var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(config["ip"]);
+                        var param = new Dictionary<string, string>();
+                        if (CheckKind == 6)
+                            param.Add("Выберите тип чека", "Продажа");
+                        else if (CheckKind == 4)
+                            param.Add("Выберите тип чека", "Возврат");
+                        else if (CheckKind == 3)
+                            param.Add("Выберите тип чека", "Возврат");
 
-                        CardValid = false;
-                        return false;
+
+                        if (PayKind == 0)
+                            param.Add("Выберите тип оплаты", "Наличные");
+                        else if (PayKind == 1)
+                            param.Add("Выберите тип оплаты", "Платежной картой");
+                        else if (PayKind == 2)
+                            param.Add("Выберите тип оплаты", "Кредитной картой");
+
+                        param.Add("Введите сумму заказа", (Amount).ToString());
+                        param.Add("Комментарий", Text.ToString());
+                        result = (byte)(proxy.RunCommand(config["name"], "Произвольный чек", param) ? 1 : 0);
                     }
-                    else
-                        CardValid = true;
-
-
-                    try
-                    {
-                        log.Write("Получение стандартной скидки для карты.", 100);
-                        long cardnum = long.Parse(CardNum);
-                        long goldStart = long.Parse(conf["GoldCardStart"]);
-                        long goldEnd = long.Parse(conf["GoldCardEnd"]);
-                        int discount = int.Parse(conf["GoldCardDisc"]);
-
-                        if (goldStart <= cardnum && cardnum <= goldEnd)
-                        {
-                            log.Write("GoldCard");
-                            goldCardDisc = discount;
-                            num_disc = discount;
-                            goldCard = true;
-                        }
-                        else
-                            goldCard = false;
-                    }
-                    catch
-                    {
-                        goldCard = false;
-                    }
-
-                    try
-                    {
-                        log.Write("Получение стандартной скидки для карты.", 100);
-                        long cardnum = long.Parse(CardNum);
-                        long silverStart = long.Parse(conf["SilverCardStart"]);
-                        long silverEnd = long.Parse(conf["SilverCardEnd"]);
-                        int discount = int.Parse(conf["SilverCardDisc"]);
-
-                        if (silverStart <= cardnum && cardnum <= silverEnd)
-                        {
-                            log.Write("SilverCard");
-                            silverCardDisc = discount;
-                            num_disc = discount;
-                            silverCard = true;
-                        }
-                        else
-                            silverCard = false;
-                    }
-                    catch
-                    {
-                        silverCard = false;
-                    }
-                    try
-                    {
-                        log.Write("Получение стандартной скидки для карты.", 100);
-                        long cardnum = long.Parse(CardNum);
-                        long platinumStart = long.Parse(conf["PlatinumCardStart"]);
-                        long platinumEnd = long.Parse(conf["PlatinumCardEnd"]);
-                        int discount = int.Parse(conf["PlatinumCardDisc"]);
-
-                        if (platinumStart <= cardnum && cardnum <= platinumEnd)
-                        {
-                            log.Write("PlatinumCard");
-                            platinumCardDisc = discount;
-                            num_disc = discount;
-                            platinumCard = true;
-                        }
-                        else
-                            platinumCard = false;
-                    }
-                    catch
-                    {
-                        platinumCard = false;
-                    }
-
-
-
-                    if (System.IO.File.Exists(conf["TermExe"]))
-                    {
-                        bool find = false;
-                        System.Diagnostics.Process[] procs = System.Diagnostics.Process.GetProcesses();
-                        for (int z = 0; z < procs.Length; z++)
-                        {
-                            try
-                            {
-
-                                if (procs[z].MainModule.FileName.ToUpper().LastIndexOf("ermEmu".ToUpper()) > 1)
-                                {
-                                    if (conf["RestartTermEmu"] == "true")
-                                    {
-
-                                        procs[z].Kill();
-                                        Thread.Sleep(2000);
-                                    }
-                                    else
-                                        find = true;
-                                    break;
-                                }
-                            }
-                            catch { }
-                        }
-                        if (!find)
-                        {
-                            try
-                            {
-                                System.Diagnostics.ProcessStartInfo inf =
-                                    new System.Diagnostics.ProcessStartInfo(conf["TermExe"]);
-                                inf.WorkingDirectory = conf["TermPath"];
-                                inf.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-                                inf.CreateNoWindow = false;
-                                System.Diagnostics.Process proc = System.Diagnostics.Process.Start(inf);
-                                Thread.Sleep(2000);
-                            }
-                            catch { }
-
-                        }
-                    }
-                    if (conf["PathToReader"] == string.Empty)
-                    {
-                        log.Write("Ошибка передачи номера карты", 100);
-                        log.Write("Указан пустой путь до дирректории обмена", 100);
-                        return false;
-                    }
-                    System.IO.File.Create(conf["PathToReader"] + CardNum).Close();
-                    return true;
-                }
-                catch (Exception e)
-                {
-
-                    log.Write(e.ToString(), 100);
-                    log.Write("Ошибка передачи номера карты", 100);
-                    return false;
-                }
-            }
-
-
-            public bool ParseCardNum(string Track, out string CardNum)
-            {
-                CardNum = "";
-                try
-                {
-                    for (int z = 1; z < 100; z++)
-                    {
-                        try
-                        {
-                            int LnrNumberStart = 0;
-                            if (int.TryParse(conf["LnrNumberStart_" + z.ToString()].Trim(),
-                                out LnrNumberStart))
-                            {
-                                string LnrTrackPattern = conf["LnrTrackPattern_" + z.ToString()].Trim();
-                                string LnrNumberPattern = conf["LnrNumberPattern_" + z.ToString()].Trim();
-                                if (LnrTrackPattern == "")
-                                    break;
-                                CardNum = GetNum(Track, LnrTrackPattern, LnrNumberStart, LnrNumberPattern);
-                                if (CardNum != "")
-                                {
-                                    return true;
-                                }
-                            }
-                        }
-                        catch { }
-                    }
-
-
                 }
                 catch
                 {
-
                 }
+                if (result == 0)
+                    System.Windows.Forms.MessageBox.Show("Не удалось напечатать чек на ККМ: " + config["serial"], "Печать чека", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                return (byte)result;
+            }
+
+
+            /// <summary>Функция обратного вызова установки заказа на ТРК</summary>
+            /// <param name="Pump">Номер ТРК</param>
+            /// <param name="Fuel">Код топлива</param>
+            /// <param name="OrderInMoney">Режим заказа: 0 - литры, 1 - деньги</param>
+            /// <param name="Quantity">Сумма заказа в миллилитрах</param>
+            /// <param name="Amount">Сумма заказа в копейках</param>
+            /// <param name="CardNum">Номер карты</param>
+            /// <param name="ctx">Ссылка полученная при инициализации библиотеки</param>
+            /// <returns>
+            /// Номер транзакции в системе управления (TransID), в случае ошибки -1;
+            /// </returns>
+            public delegate long SetDose_Delegate(int Pump, int CardType, IntPtr ctx);
+
+            /// <summary>
+            /// Получить состояние ТРК
+            /// </summary>
+            /// <param name="Pump">Номер ТРК</param>
+            /// <param name="ctx">Ссылка полученная при инициализации библиотеки</param>
+            /// <returns>
+            /// Ссылка на структуру содержащую состояние ТРК:
+            /// 
+            /// public struct GetPumpStateResponce
+            /// {
+            ///     public byte DispStatus;//0
+            ///     public ushort StateFlags;//1
+            ///     public int ErrorCode;//3
+            ///     public byte DispMode;//7
+            ///     public byte UpNozz;//8
+            ///     public byte UpFuel;//9
+            ///     public byte UpTank;//10
+            ///     public Int64 TransID;//11
+            ///     public byte PreselMode;//19
+            ///     public double PreselDose;//20
+            ///     public double PreselPice;//28
+            ///     public byte PreselFuel;//36
+            ///     public byte PreselFullTank;//37
+            ///     public double FillingVolume;//38
+            ///     public double FillingPrice;//46
+            ///     public double FillingSum;//54
+            /// }
+            /// </returns>
+            public delegate Driver.GetPumpStateResponce GetDose_Delegate(long Pump, IntPtr ctx);
+            /// <summary>
+            /// Остановка ТРК/Сброс заказа с ТРК
+            /// При успешном выполнении данной функции необходимо выполнить попытку сброса заказа с ТРК, и в случае успеха  
+            /// Выполнить функцию "FillingOver" с передачей в неё фактически отпущенной дозы.
+            /// </summary>
+            /// <param name="TransID">Номер транзакции</param>
+            /// <param name="ctx">Ссылка полученная при инициализации библиотеки</param>
+            /// <returns></returns>
+            public delegate int CancelDose_Delegate(long TransID, IntPtr ctx);
+
+
+            public delegate int SQL_Write_Delegate([MarshalAs(UnmanagedType.LPWStr)]string SQL_Request, IntPtr ctx);
+            public delegate IntPtr SQL_Read_Delegate([MarshalAs(UnmanagedType.LPWStr)]string SQL_Request, IntPtr ctx);
+
+            /// <summary>
+            /// Проверка доступности ТРК.
+            /// Данная функция может использоваться для предварительного захвата ТРК терминалом.(не рекомендуется)
+            /// </summary>
+            /// <param name="Pump">Номер ТРК</param>
+            /// <param name="ReleasePump">Если true - терминал долже</param>
+            /// <param name="ctx">Ссылка полученная при инициализации библиотеки</param>
+            /// <returns></returns>
+            public delegate int HoldPump_Delegate(int Pump, byte ReleasePump, IntPtr ctx);
+
+            /// <summary>
+            /// Обновление суммы заказа.
+            /// После получения терминалом информации о завершении отпуска топлива, может возникнуть необходимость пересчета заказа
+            /// например при использовании пороговых скидок или бонусных систем.
+            /// В таком случае драйвер передает информацию о пересчитаном заказе в данную функцию
+            /// </summary>
+            /// <param name="Amount">Сумма заказа в копейках</param>
+            /// <param name="Price">Цена в копейках</param>
+            /// <param name="Trans_ID">Номер транзакции</param>
+            /// <param name="DiscountMoney">
+            /// Сумма скидки  в копейках 
+            /// (в зависимости от требований используемой системы лояльности может передаваться либо сумма скидки с суммы, 
+            /// либо сумма скидки с единицы товара (с литра))
+            /// </param>
+            /// <param name="ctx">Ссылка полученная при инициализации библиотеки</param>
+            /// <returns></returns>
+            public delegate int UpdateFillingOver_Delegate(int Amount, int Price, long Trans_ID, int DiscountMoney, IntPtr ctx);
+
+            /// <summary>
+            /// Передача дполнительного номера карты, используемого при транзакции.
+            /// В случае, если при операции с терминалом использовалась не одна карта (например при оплате топлива по банковской карте с использованием
+            /// карты лояльности) терминал передает информацию по данным картам в данную функцию.
+            /// </summary>
+            /// <param name="_DateTime">Дата/Время предъявления карты</param>
+            /// <param name="CardNo">Номер карты</param>
+            /// <param name="CardType">Тип карты</param>
+            /// <param name="Trans_ID">Номер транзакции</param>
+            /// <param name="ctx">Ссылка полученная при инициализации библиотеки</param>
+            /// <returns></returns>
+            public delegate int InsertCardInfo_Delegate(long _DateTime, [MarshalAs(UnmanagedType.AnsiBStr)]string CardNo, int CardType, long Trans_ID, IntPtr ctx);
+
+
+            /*
+             *                     //Тип документа (0 - ФД, 1 - Не ФД, 2 - Отчет)
+                                    + DocType.ToString() + ", "
+                                    //Сумма                                                 
+                                    + Amount.ToString().Replace(",", ".") + ", "
+                                    //Произвольный чек                                                  
+                                    + (VarCheck ? "1" : "0") + ", "
+                                    //Текст чека
+                                    + "\'" + RecieptText + "\', "
+                                    //Тип документа
+                                    + "\'" + DocKind + "\', "
+                                    //Тип документа (6 - Продажа, 4 - Возврат)
+                                    + DocKindCode.ToString() + ", "
+                                    //Вид платежа (0 - Нал, 1 - Плат. картой, 2 - Безнал)
+             */
+            /// <summary>
+            /// Сохранение информации о напечатанном документе
+            /// </summary>
+            /// <param name="RecieptText">
+            /// Образ документа
+            /// </param>
+            /// <param name="_DateTime">Дата/Время печати документа</param>
+            /// <param name="DeviceName">Имя терминала, на котором был напечатан чек</param>
+            /// <param name="DeviceSerial">Серийный номер фискального регистратора</param>
+            /// <param name="DocNo">Номер документа</param>
+            /// <param name="DocType">
+            /// Тип документа:
+            /// 0 - ФД, 
+            /// 1 - Не ФД, 
+            /// 2 - Отчет
+            /// </param>
+            /// <param name="Amount">Сумма чека</param>
+            /// <param name="VarCheck">Если 1 - произвольный чек</param>
+            /// <param name="DocKind">Вид документа</param>
+            /// <param name="DocKindCode"> Код вида документа
+            /// 6 - Продажа, 
+            /// 4 - Возврат
+            /// </param>
+            /// <param name="PayType"> Тип оплаты
+            /// 0 - Нал, 1 - Плат. картой, 2 - Безнал
+            /// </param>
+            /// <param name="FactDoc">Если 1 - чек по факту</param>
+            /// <param name="BP_Product">Код продукта</param>
+            /// <param name="TransID">Номер транзакции [В данный момент не используется]</param>
+            /// <param name="ctx"></param>
+            /// <returns></returns>
+            public delegate int SaveReciept_Delegate([MarshalAs(UnmanagedType.AnsiBStr)]string RecieptText,
+                                                                long _DateTime,
+                                                                [MarshalAs(UnmanagedType.AnsiBStr)]string DeviceName,
+                                                                [MarshalAs(UnmanagedType.AnsiBStr)]string DeviceSerial,
+                                                                int DocNo,
+                                                                int DocType,
+                                                                int Amount,
+                                                                int VarCheck,
+                                                                [MarshalAs(UnmanagedType.AnsiBStr)]string DocKind,
+                                                                int DocKindCode,
+                                                                int PayType,
+                                                                int FactDoc,
+                                                                int BP_Product,
+                                                                long TransID,
+                                                                IntPtr ctx);
+
+
+
+            #endregion
+
+            #region Функции оболочки
+
+            public static bool CancelDose(string RRN)
+            {
+                try
+                {
+                    log.WriteFormated("Сброс дозы. RRN: {0}", RRN);
+
+                    long TransID = -1;
+                    var tm = TransMemory.ToArray();
+                    foreach (var t in tm)
+                        if (t.Value.OrderRRN == RRN)
+                            TransID = t.Key;
+
+                    if (TransID > 0)
+                    {
+                        log.WriteFormated("Найдена транзакция. RRN: {0}, TransID: {1}", RRN, TransID);
+
+                        return callback_CancelDose(TransID) == 1;
+                    }
+                    else
+                        log.WriteFormated("Транзакция не найдена. RRN: {0}", RRN);
+                }
+                catch { log.Write("error: CancelDose" + RRN); }
+
+
                 return false;
             }
-            static string GetNum(string track, string TrackPattern, int NumberStart, string NumberPattern)
+
+            public static long SetDose(RemotePump_Driver.OrderInfo Order)
             {
+                //int Pump, int Fuel, bool OrderInMoney, decimal Quantity, decimal Price, decimal Amount, int CardType, string CardNum, string RRN
+                log.Write(string.Format("Установка дозы на ТРК: {0}, продукт: {1}, заказ в деньгах: {2}, кол-во: {3}, сумма: {4}, номер карты: {5}",
+                    Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, Order.CardNO));
 
-                Regex regex = new Regex(TrackPattern);
-                if (regex.IsMatch(track) && (regex.Match(track).Value.Length == track.Length))
+                var trans_id = callback_SetDose(Order.PumpNo, Order.PaymentCode);
+                log.Write("Ответ АСУ: trans_id = " + trans_id);
+
+                if (trans_id > 0)
                 {
-                    Regex regexNumber = new Regex(NumberPattern);
-                    if (regexNumber.IsMatch(track, NumberStart))
-                        return regexNumber.Match(track, NumberStart).Value;
-                }
-                return "";
-            }
+                    lock (TransMemory)
+                    {
+                        if (TransMemory.ContainsKey(trans_id))
+                        {
+                            TransMemory.Remove(trans_id);
+                        }
+#warning Если будут сбойные ситуации - убрать
+                        Order.PumpRRN = trans_id.ToString();
+                        /*********************************************/
+                        TransMemory.Add(trans_id, Order);
 
-            /// <summary>
-            /// Функция выполнения дебита клиента по системе бонус плюс
-            /// </summary>
-            /// <param name="Price">Цена</param>
-            /// <param name="Amount">Сумма</param>
-            /// <param name="Quantity">Кол-во</param>
-            /// <param name="GoodCode">Код продукта в системе BonusPlus</param>
-            /// <param name="GoodName">Наименование продукта</param>
-            /// <param name="withDiscount">Фиксирование суммы заказа</param>
-            /// <param name="BpRRN">Возвращаемый параметр. Номер транзакции.</param>
-            /// <param name="Discount">Возвращаемый параметр. Скидка.</param>
-            /// <param name="RespCode">Возвращаемый параметр. Код ответа от терминала.</param>
-            /// <param name="ScreenMsg">Возвращаемый параметр. Текст экранного сообщения терминала.</param>
-            /// <returns>Результат выполнения функции</returns>        
-            private bool Debit(uint Price, uint Amount, uint Quantity,
-                string GoodCode, string GoodName, bool withDiscount, out byte[] BpRRN, out int Discount,
-                out int RespCode, out string ScreenMsg)
-            {
-                if (GoodName == "discount" && (Price == 0) && (Amount == 0) && (Quantity == 0))
-                {
-                    Price = 1;
-                    Amount = 1;
-                    Quantity = 1;
-                }
-                TLV tlvData = new TLV();
-                RespCode = 0;
-                ScreenMsg = ".......";
-                byte[] receiveData = new byte[0];
-                byte[] sendData = new byte[0];
-                BpRRN = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-                Discount = 0;
-                bool zeroDiscontBugFixFind = false;
-
-                log.Write("Чтение первого входящего сообщения от терминала", 100);
-                // Чтение первого входящего сообщения от терминала
-                if (ReceiveECDLC(out receiveData) == -1)
-                    return false;
-                // Распаковка содержимого сообщения, если оно не информационное - выходим
-                tlvData.UnpackData(receiveData);
-                if (tlvData.GetTagData(1)[0] != 1)
-                    return false;
-                //--------------------------------------------------
-                log.Write("Читаем инфо по карте", 100);
-                //Читаем инфо по карте
-                try
-                {
-                    ScreenMsg = Encoding.GetEncoding(866).GetString(tlvData.GetTagData(6));
-                }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                    ScreenMsg = "..........";
-                }
-                //--------------------------------------------------
-                log.Write("Отправляем терминалу сообщение \"Жди ещё\"", 100);
-                // Отправляем терминалу сообщение "Жди ещё"
-                tlvData.Clear();
-                tlvData.AddTag(1, new byte[] { 5 });
-                if (tlvData.PackData(ref sendData))
-                    return false;
-                if (SendECDLC(sendData) == -1) return false;
-                //--------------------------------------------------
-
-                log.Write("Формируем запрос на модификацию чека", 100);
-                // Формируем запрос на модификацию чека
-                TLV FiscalCheque = new TLV();
-                TLV article = new TLV();
-                TLV PP = new TLV();
-                byte[] articleArray = new byte[0];
-                byte[] fiscalArray = new byte[0];
-                byte[] PPArray = new byte[0];
-                //.................................................
-                article.AddTag(1, Encoding.GetEncoding(866).GetBytes(GoodCode));
-                article.AddTag(2, reverse(BitConverter.GetBytes(Quantity)));
-                article.AddTag(3, reverse(BitConverter.GetBytes(Price)));
-                article.AddTag(4, reverse(BitConverter.GetBytes(Amount)));
-                article.AddTag(5, Encoding.GetEncoding(866).GetBytes(GoodName));
-                if (withDiscount) article.AddTag(6, new byte[] { 1 });
-                article.PackData(ref articleArray);
-                //.................................................
-                PP.AddTag(1, reverse(BitConverter.GetBytes(Amount)));
-                PP.AddTag(2, reverse(BitConverter.GetBytes(0)));
-                PP.AddTag(3, reverse(BitConverter.GetBytes(0)));
-                PP.AddTag(4, reverse(BitConverter.GetBytes(0)));
-                PP.AddTag(5, reverse(BitConverter.GetBytes(0)));
-                PP.PackData(ref PPArray);
-                //.................................................
-                FiscalCheque.AddTag(1, articleArray);
-                if (withDiscount) FiscalCheque.AddTag(2, new byte[] { 1 });
-                FiscalCheque.AddTag(3, reverse(BitConverter.GetBytes(Amount)));
-                FiscalCheque.AddTag(0x0A, PPArray);
-
-                FiscalCheque.PackData(ref fiscalArray);
-                //.................................................
-                tlvData.Clear();
-                tlvData.AddTag(1, new byte[] { 6 });
-                tlvData.AddTag(3, reverse(BitConverter.GetBytes(Amount)));
-                tlvData.AddTag(8, fiscalArray);
-                //.................................................
-                if (tlvData.PackData(ref sendData))
-                    return false;             // В случае ошибки выходим.
-                                              //--------------------------------------------------
-
-                log.Write("Отправляем запрос на модификацию чека", 100);
-                // Отправляем запрос на модификацию чека
-                if (SendECDLC(sendData) == -1) return false;
-                // Читаем ответ от терминала
-                if (ReceiveECDLC(out receiveData) == -1)
-                    return false;             // В случае ошибки выходим.
-                                              //--------------------------------------------------
-
-
-                log.Write("Распаковываем и распознаём принятые данные", 100);
-                // Распаковываем и распознаём принятые данные 
-                tlvData.UnpackData(receiveData);
-                FiscalCheque.Clear();
-                if (tlvData.GetTagData(8).Length == 1)
-                {
-                    log.Write("В ответе терминала отсутствует поле \"Фискальный чек\"", 100);
+                    }
                 }
                 else
+                    log.Write("Ошибка при задании дозы на ТРК. callback_SetDose = null");
+                return trans_id;
+            }
+            public static GetPumpStateResponce GetDose(long Pump)
+            {
+
+                //var ptr = Marshal.AllocCoTaskMem(Marshal.SizeOf(transact));
+                //Marshal.WriteInt32(ptr, 5);
+                //Marshal.StructureToPtr(transact, ptr, false);
+                //var ret_str = SetDoseResponse.ReadFromIntPtr(callback_SetDose.Invoke(Pump, CardType, ctx)); // (SetDoseResponse)Marshal.PtrToStructure(Marshal.ReadIntPtr(ret), typeof(SetDoseResponse));
+
+                var result = callback_GetDose(Pump);
+                if (!result.Equals(default(Driver.GetPumpStateResponce)))
                 {
-                    FiscalCheque.UnpackData(tlvData.GetTagData(8));
+                    //var res = GetPumpStateResponce.ReadFromPtr(result);
+                    //log.Write("Ответ АСУ: DispStatus = " + res.DispStatus.ToString());
+                    return result;
                 }
+                else
+                    //log.Write("Ошибка при получении дозы на ТРК. callback_SetDose = null");
 
-
-                RespCode = (int)tlvData.GetTagData(2)[0];
-                log.Write("Код ответа от терминала: " + RespCode.ToString());
-                try
-                {
-                    byte[] discountArr = FiscalCheque.GetTagData(9);
-                    if (discountArr.Length >= 4)
-                        Discount = BitConverter.ToInt32(reverse(discountArr), 0);
-                    else
-                    {
-                        Discount = 0;
-                        zeroDiscontBugFixFind = true;
-                        if (!ZeroDiscontEnable)
-                        {
-                            ClientSock.Send(new byte[] { (byte)STX.EOT });
-                            return true;
-                        }
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                    Discount = 0;
-                    zeroDiscontBugFixFind = true;
-                    if (!ZeroDiscontEnable)
-                    {
-                        ClientSock.Send(new byte[] { (byte)STX.EOT });
-                        return true;
-                    }
-                }
-
-                BpRRN = tlvData.GetTagData(9);
-                log.Write(string.Format("Скидка: {0}. Номер транзакции: {1}",
-                    Discount, BitConverter.ToString(BpRRN)));
-
-                if (GoodName == "discount")
-                {
-                    ClientSock.Send(new byte[] { (byte)STX.EOT });
-                    return true;
-                }
-
-
-
-                log.Write("Формируем и отправляем запрос на закрытие чека", 100);
-                // Формируем и отправляем запрос на закрытие чека
-                tlvData.Clear();
-                tlvData.AddTag(1, new byte[] { 4 });
-                tlvData.AddTag(2, new byte[] { 0 });
-                //if(withDiscount)Amount = Amount - (uint)(Amount / Discount);
-                tlvData.AddTag(3, reverse(BitConverter.GetBytes(Amount)));
-                tlvData.AddTag(5, GetBCDDateTime());
-                tlvData.AddTag(8, fiscalArray);
-                tlvData.AddTag(0x0A, BitConverter.GetBytes(0));
-                tlvData.AddTag(0x0B, BitConverter.GetBytes(0));
-                tlvData.AddTag(0x0D, BitConverter.GetBytes(0));
-                tlvData.AddTag(0x10, BitConverter.GetBytes(0));
-                tlvData.AddTag(0x1F, BitConverter.GetBytes(0));
-                //.................................................
-                if (tlvData.PackData(ref sendData))
-                    return false;
-                if (SendECDLC(sendData) == -1) return false;
-
-                log.Write("Читаем ответ от терминала", 100);
-                // Читаем ответ от терминала
-                if (ReceiveECDLC(out receiveData) == -1)
-                    return false;
-                tlvData.UnpackData(receiveData);
-
-
-                if (tlvData.GetTagData(1)[0] != 1)
-                {
-                    return zeroDiscontBugFixFind;
-                }
-                return true;
+                    return new GetPumpStateResponce();
+            }
+            public static bool HoldPump(int Pump, bool Release = false)
+            {
+                return callback_HoldPump(Pump, (byte)((Release) ? 1 : 0)) == 1;
             }
 
-            /// <summary>
-            /// Полный возврат продажи
-            /// </summary>
-            /// <param name="Amount">Сумма возврата</param>
-            /// <param name="BpRRN">Номер транзакции</param>
-            /// <param name="RespCode">Код ответа от терминала</param>
-            /// <returns>Резульат выполнения возврата</returns>
-            private bool Credit(uint Amount, byte[] BpRRN, out int RespCode)
+            public static bool UpdateFillingOver(decimal Amount, decimal Price, long Trans_ID, decimal DiscountMoney)
             {
-                TLV tlvData = new TLV();
-                byte[] receiveData = new byte[0];
-                byte[] sendData = new byte[0];
-                RespCode = 0;
-
-                log.Write("Чтение первого входящего сообщения от терминала", 100);
-                // Чтение первого входящего сообщения от терминала
-                if (ReceiveECDLC(out receiveData) == -1)
-                    return false;
-                log.Write("Распаковка содержимого сообщения", 100);
-                // Распаковка содержимого сообщения, если оно не информационное - выходим
-                tlvData.UnpackData(receiveData);
-                if (tlvData.GetTagData(1)[0] != 1)
-                    return false;
-                //--------------------------------------------------
-
-                log.Write("Формируем и отправляем запрос на возврат", 100);
-                // Формируем и отправляем запрос на возврат 
-                tlvData.Clear();
-                tlvData.AddTag(1, new byte[] { 10 });
-                tlvData.AddTag(3, reverse(BitConverter.GetBytes(Amount)));
-                tlvData.AddTag(9, BpRRN);
-                if (tlvData.PackData(ref sendData))
-                    return false;
-                if (SendECDLC(sendData) == -1) return false;
-
-                log.Write("Читаем ответ то терминала", 100);
-                if (ReceiveECDLC(out receiveData) == -1)
-                    return false;
-                tlvData.UnpackData(receiveData);
-                RespCode = (int)tlvData.GetTagData(2)[0];
-                log.Write("Код ответа от терминала: " + RespCode.ToString());
-                if (tlvData.GetTagData(1)[0] != 1)
-                    return false;
-                if (tlvData.GetTagData(2)[0] != 0)
-                    return false;
-                try
-                {
-                    log.Write("Отправляем запрос на закрытие сессии", 100);
-                    ClientSock.Send(new byte[] { (byte)STX.EOT });
-                }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                }
-                return true;
-            }
-
-            /// <summary>
-            /// Возвращает принятый массив в обратном порядке
-            /// </summary>
-            /// <param name="arr">Массив элементу которого необходимо вернуть в обратном порядке.</param>
-            /// <returns>Принятый массив в обратном порядке.</returns>
-            private byte[] reverse(byte[] arr)
-            {
-                Array.Reverse(arr);
-                return arr;
-            }
-
-            /// <summary>
-            /// Функция вычисления временной метки в формате BCD
-            /// </summary>
-            /// <returns>Временная метка.</returns>
-            private byte[] GetBCDDateTime()
-            {
-                string year = DateTime.Now.Year.ToString();
-                string month = DateTime.Now.Month.ToString();
-                if (month.Length == 1) month = "0" + month;
-                string day = DateTime.Now.Day.ToString();
-                if (day.Length == 1) day = "0" + day;
-                string hour = DateTime.Now.Hour.ToString();
-                if (hour.Length == 1) hour = "0" + hour;
-                string min = DateTime.Now.Minute.ToString();
-                if (min.Length == 1) min = "0" + min;
-                string sec = DateTime.Now.Second.ToString();
-                if (sec.Length == 1) sec = "0" + sec;
-                return new byte[] { ConvertToBCD(year[0], year[1]),
-                ConvertToBCD(year[2], year[3]), ConvertToBCD(month[0], month[1]),
-                ConvertToBCD(day[0],day[1]), ConvertToBCD(hour[0], hour[1]),
-                ConvertToBCD(min[0], min[1]), ConvertToBCD(sec[0], sec[1])};
-            }
-
-            /// <summary>
-            /// Конвертирование в BCD формат
-            /// </summary>
-            /// <param name="a">Десятичная цифра старшего байта</param>
-            /// <param name="b">Десятичная цифра младшего байта</param>
-            /// <returns>Данные упакованные в BCD</returns>
-            private byte ConvertToBCD(char a, char b)
-            {
-                byte aa = (byte)(byte.Parse(a.ToString()) << 4);
-                byte bb = byte.Parse(b.ToString());
-                return (byte)(aa + bb);
-            }
-
-
-            /// <summary>
-            /// Метод отправки данных по протоколу ECDLC
-            /// </summary>
-            /// <param name="sendData">Данные которые необходимо передать</param>
-            /// <returns>Результат выполнения функции. (успешное выполнение = 1)</returns>
-            private int SendECDLC(byte[] sendData)
-            {
-                obmen.Write("Отправка данных терминалу");
-                obmen.Write("Отправляю данные: " + BitConverter.ToString(sendData));
-                ECDLC ecdlcData = new ECDLC();
-                byte[] receiveData = new byte[0];
-                try
-                {
-                    Start:
-                    ecdlcData.PackData(sendData);
-                    ClientSock.Send(ecdlcData.Pack);
-                    WaitSTX:
-                    if (cancel)
-                    {
-                        log.Write("Принудительное завершение обмена.");
-                        this.Close();
-                        return -1;
-                    }
-                    if (readData(out receiveData) < 1)
-                    {
-                        obmen.Write("Ошибка приёма данных.");
-                        return -1;
-                    }
-                    if (receiveData[0] == (byte)STX.NAK)
-                    {
-                        obmen.Write("От терминала получен ответ \"Получены искажённые данные\". Отправляем данные заново.");
-                        goto Start;
-                    }
-                    if (receiveData[0] == (byte)STX.ACK)
-                    {
-                        obmen.Write("От терминала получен ответ \"Данные успешно приняты\".");
-                        return 1;
-                    }
-                    if (receiveData[0] == (byte)STX.BEL)
-                    {
-                        obmen.Write("От терминала получен ответ \"Жди ещё\". Отправляем подтверждение ожидания.");
-                        ClientSock.Send(new byte[] { (byte)STX.BEL });
-                        goto WaitSTX;
-                    }
-                    if (receiveData[0] == (byte)STX.EOT)
-                    {
-                        obmen.Write("От терминала получен ответ \"Закрытие соединения\". Закрываем порт обмена с терминалом.");
-                        ClientSock.Close();
-                        Listener.Stop();
-                        return -2;
-                    }
-                    if ((receiveData[0] == (byte)STX.STX))
-                    {
-                        obmen.Write("От терминала получен ответ содержащий пакет данных, сохраняем его в памяти для дальнейшего использования.");
-                        memReciveData = receiveData;
-                        return 1;
-                    }
-                    return -2;
-                }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                    return -2;
-                }
-            }
-
-            /// <summary>
-            /// Метод получения данных по протоколу ECDLC
-            /// </summary>
-            /// <param name="Data">Возвращаемый параметр содержащий принятые данные.</param>
-            /// <returns>Результат выполнения функции. (успешное выполнение = 1)</returns>
-            private int ReceiveECDLC(out byte[] Data)
-            {
-                obmen.Write("Получение данных от терминала");
-                byte[] reciveData = new byte[0];
-                Data = new byte[0];
-                ECDLC ecdlcData = new ECDLC();
-                try
-                {
-                    Start:
-                    if (cancel)
-                    {
-                        log.Write("Принудительное завершение обмена.");
-                        this.Close();
-                        return -1;
-                    }
-                    if (memReciveData.Length > 0)
-                    {
-                        obmen.Write("Данные были прочитаны при предыдущей транзакций.");
-                        obmen.Write("Данные: " + BitConverter.ToString(memReciveData));
-                        reciveData = memReciveData;
-                        memReciveData = new byte[0];
-                    }
-                    else
-                    {
-                        obmen.Write("Чтение данных.");
-                        if (readData(out reciveData) < 1) return -1;
-                        obmen.Write("Получено: " + BitConverter.ToString(reciveData));
-                    }
-                    if (reciveData[0] == (byte)STX.ENQ)
-                    {
-                        obmen.Write(">>ENQ");
-                        obmen.Write("Распознан символ запроса на установление соединения, отправляем ответ подтверждающий установку соединения.");
-                        ClientSock.Send(new byte[] { (byte)STX.ACK });
-                        obmen.Write("<<ACK");
-                        goto Start;
-                    }
-                    if (reciveData[0] == (byte)STX.BEL)
-                    {
-                        obmen.Write(">>BEL");
-                        obmen.Write("Распознан символ удержания соединения, отправляем ответ подтверждающий удержание соединения.");
-                        ClientSock.Send(new byte[] { (byte)STX.BEL });
-                        obmen.Write("<<BEL");
-                        goto Start;
-                    }
-                    if (reciveData[0] == (byte)STX.STX)
-                    {
-                        obmen.Write(">>STX");
-                        obmen.Write("Распознан символ начала пакета.");
-                        if (ecdlcData.AddData(reciveData) == -1)
-                        {
-                            obmen.Write("Ошибка контрольной суммы CRC16. Отправляем запрос на повторную передачу сообщения.");
-                            ClientSock.Send(new byte[] { (byte)STX.NAK });
-                            obmen.Write("<<NAK");
-                            goto Start;
-                        }
-                        else
-                        {
-                            obmen.Write("Проверка CRC16 прошла успешно. Отправляем подтверждение успешного приёма.");
-                            ClientSock.Send(new byte[] { (byte)STX.ACK });
-                            obmen.Write("<<ACK");
-                            Data = ecdlcData.Data;
-                            return 1;
-                        }
-                    }
-                    return 0;
-                }
-                catch (Exception e)
-                {
-                    log.Write(e.ToString(), 100);
-                    return -1;
-                }
-
-            }
-
-            /// <summary>
-            /// Чтение данных из сокета.
-            /// </summary>
-            /// <param name="readData">Возвращаемый  параметр содержащий прочитанные данные</param>
-            /// <returns>Кол-во прочитанных элементов</returns>
-            private int readData(out byte[] readData)
-            {
-                int _timeout = timeout;
-                int i = 0;
-                readData = new byte[0];
-                while (i == 0 && !cancel)
+                if (UpdateFillingOver_callback != null)
                 {
                     try
                     {
-                        readData = new byte[ClientSock.Available];
-                        i = ClientSock.Receive(readData);
+                        lock (locker)
+                            return UpdateFillingOver_callback.Invoke((int)(Amount * 100), (int)(Price * 100), Trans_ID, (int)(DiscountMoney * 100), ctx) == 1;
                     }
-                    catch (Exception e)
+                    catch { }
+                    return false;
+                }
+                else if (callback_SQL_Read_callback != null && callback_SQL_Write_callback != null)
+                    return UpdateFillingOver("TRANS_FUEL_ORDER", Amount, Price, Trans_ID, DiscountMoney)
+                        && UpdateFillingOver("GSMARCHIVE", Amount, Price, Trans_ID, DiscountMoney);
+                return false;
+            }
+
+            private static bool UpdateFillingOver(string Table, decimal Amount, decimal Price, long Trans_ID, decimal DiscountMoney)
+            {
+                for (int z = 0; z < 5; z++)
+                {
+                    try
                     {
-                        log.Write(e.ToString(), 100);
-                        i = -1;
+                        if (callback_SQL_Write($"update {Table} set FACTPRICE = {Price.ToString().Replace(",", ".")}, FACTSUMMA = {Amount.ToString().Replace(",", ".")}, DISCOUNTMONEY={DiscountMoney.ToString().Replace(",", ".")} where TRANS_ID = {Trans_ID}") == 1)
+                        {
+                            var result = callback_SQL_Read($"select FACTPRICE, FACTSUMMA, DISCOUNTMONEY from {Table}  where TRANS_ID = {Trans_ID}");
+                            if (result?.Length == 1 && result?[0].Split('/').Length == 3)
+                            {
+                                var values = result?[0].Replace(".", ",").Split('/');
+                                decimal db_price, db_amount, db_dicsount;
+                                if (decimal.TryParse(values[0], out db_price) && decimal.TryParse(values[1], out db_amount) && decimal.TryParse(values[2], out db_dicsount))
+                                {
+                                    if (test_values(Price, db_price, 2) && test_values(Amount, db_amount, 2) && test_values(DiscountMoney, db_dicsount, 2))
+                                    {
+                                        log.Write($"Таблица {Table} обновленна успешно");
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
                     }
-                    if (i == 0 && _timeout > 0)
+                    catch (Exception ex)
                     {
-                        Thread.Sleep(1);
-                        _timeout--;
+                        log.Write($"Ошибка при выполнении пересчета заказа: {ex}");
+                    }
+                    System.Threading.Thread.Sleep(1000);
+                }
+                log.Write($"Не удалось обновить таблицу {Table}.");
+                return false;
+            }
+            private static bool test_values(decimal v1, decimal v2, int decimals) => Math.Round(v1, decimals) == Math.Round(v2, decimals);
+            public static bool InsertCardInfo(DateTime _DateTime, string CardNo, int CardType, long Trans_ID)
+            {
+                if (InsertCardInfo_callback != null)
+                {
+                    try
+                    {
+                        log.Write($"Сохранение информации о карте: {_DateTime.ToString()}, {CardNo}, {CardType}, {Trans_ID}");
+                        lock (locker)
+                            InsertCardInfo_callback.Invoke(BitConverter.DoubleToInt64Bits(_DateTime.ToOADate()), CardNo, CardType, Trans_ID, ctx);
+                    }
+                    catch { }
+                    return false;
+                }
+                else if (callback_SQL_Read_callback != null && callback_SQL_Write_callback != null)
+                    return (callback_SQL_Write(
+                         "insert into personalarchive (TRANS_ID, ISSUER_ID, CARD_ID, DATETIME) "
+                                + "VALUES("
+                                 //Номер транзакции
+                                 + Trans_ID.ToString() + ", "
+                                 //Код эмитента
+                                 + CardType.ToString() + ", "
+                                 //Номер карты
+                                 + "\'" + CardNo + "\', "
+                                 //Дата/время
+                                 + "\'" + _DateTime.ToString("dd.MM.yyyy HH:mm:ss") + "\')") == 1);
+                return false;
+            }
+
+            public static bool SaveReciept(string RecieptText, DateTime _DateTime, string DeviceName, string DeviceSerial, int DocNo = 0,
+                int DocType = 1, decimal Amount = 0, bool VarCheck = false, string DocKind = "", int DocKindCode = 0, int PayType = 0, long TransID = 0, bool FactDoc = false, int BP_Product = 0)
+            {
+                if (SaveReciept_callback != null)
+                {
+                    try
+                    {
+                        lock (locker)
+                            return SaveReciept_callback.Invoke(RecieptText, BitConverter.DoubleToInt64Bits(_DateTime.ToOADate()), DeviceName, DeviceSerial, DocNo, DocType, (int)(Amount * 100), VarCheck ? 1 : 0, DocKind, DocKindCode, PayType, FactDoc ? 1 : 0, BP_Product, TransID, ctx) == 1;
+                    }
+                    catch { }
+                    return true;
+                }
+                else if (callback_SQL_Read_callback != null && callback_SQL_Write_callback != null)
+                {
+                    #region Проверка на наличие записи в базе
+                    var result = false;
+                    var tmp = callback_SQL_Read($"select * from docs where host = '{DeviceName}' and datetime = '{_DateTime.ToString("dd.MM.yyyy HH:mm:ss")}' and serno = '{DeviceSerial}' and docnum = { DocNo.ToString()} and doctype = {DocType.ToString()}");
+                    if (tmp?.Count() > 0)
+                    {
+                        log.Write("Данный чек бы сохранен ранее:" + tmp[0] ?? " нет");
+                        result = true;
+                    }
+                    #endregion
+                    else
+                    {
+                        result = (callback_SQL_Write(
+                            "INSERT INTO DOCS (DATETIME, HOST, SERNO, DOCNUM, DOCTYPE, SUMM, VARCHECK, DOCIMAGE, DOCKIND, DOCKINDCODE, PAYMENTKIND, DEVICENAME, TRANS_ID, FACTDOC) "
+                                   + "VALUES("
+                                    //Дата/время
+                                    + "\'" + _DateTime.ToString("dd.MM.yyyy HH:mm:ss") + "\', "
+                                    //Рабочее место
+                                    + "\'" + DeviceName + "\', "
+                                    //Серийный номер
+                                    + "\'" + DeviceSerial + "\', "
+                                    //Номер документа
+                                    + "\'" + DocNo.ToString() + "\', "
+                                    //Тип документа (0 - ФД, 1 - Не ФД, 2 - Отчет)
+                                    + DocType.ToString() + ", "
+                                    //Сумма                                                 
+                                    + Amount.ToString().Replace(",", ".") + ", "
+                                    //Произвольный чек                                                  
+                                    + (VarCheck ? "1" : "0") + ", "
+                                    //Текст чека
+                                    + "\'" + RecieptText + "\', "
+                                    //Тип документа
+                                    + "\'" + DocKind + "\', "
+                                    //Тип документа (6 - Продажа, 4 - Возврат)
+                                    + DocKindCode.ToString() + ", "
+                                    //Вид платежа (0 - Нал, 1 - Плат. картой, 2 - Безнал)
+                                    + PayType.ToString() + ", "
+                                    //Имя устройства, на котором был напечатан чек
+                                    + "\'" + DeviceName + "\', "
+                                    //Номер транзакции
+                                    + TransID.ToString() + ", "
+                                    //Фактический документ
+                                    + (FactDoc ? "1" : "0") + ")") == 1);
+                    }
+
+                    int internal_code = 0;
+                    if (DocType == 0 && result && (internal_code = TranslateProdCode(BP_Product)) > 0)
+                    {
+                        try
+                        {
+                            for (int z = 0; z < 5; z++)
+                            {
+                                log.Write("Сохранение товарной позиции. Попытка: " + (z + 1).ToString());
+                                System.Threading.Thread.Sleep(1000);
+                                tmp = callback_SQL_Read($"select * from doc_items where host = '{DeviceName}' and datetime = '{_DateTime.ToString("dd.MM.yyyy HH:mm:ss")}' and serno = '{DeviceSerial}' and docnum = { DocNo.ToString()} and ITEM = {internal_code} and itemkind = 2 and itemno = 1");
+                                if (tmp?.Count() > 0)
+                                {
+                                    log.Write("Данная позиция чека была сохранена ранее:" + tmp[0] ?? "нет");
+                                    result = true;
+                                    //break;
+                                }
+                                else
+                                {
+                                    if (callback_SQL_Write("INSERT INTO DOC_ITEMS (DATETIME, HOST, SERNO, DOCNUM, ITEM, ITEMKIND, ITEMNO, SECTION,  SUMM) "
+                                               + "VALUES("
+                                                //Дата/время
+                                                + "\'" + _DateTime.ToString("dd.MM.yyyy HH:mm:ss") + "\', "
+                                                //Рабочее место
+                                                + "\'" + DeviceName + "\', "
+                                                //Серийный номер
+                                                + "\'" + DeviceSerial + "\', "
+                                                //Номер документа
+                                                + "\'" + DocNo.ToString() + "\', "
+                                                //Продукт
+                                                + internal_code.ToString()
+                                                // Тип записи (2 = топливо), Номер записи, Секция 
+                                                + ", 2, 1, 1,"
+                                                //Сумма                                                 
+                                                + Amount.ToString().Replace(",", ".") + ")", 1) == 0)
+                                    {
+                                        result = true;
+                                        break;
+                                    }
+                                    else
+                                        result = false;
+
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    return result;
+                }
+                return false;
+            }
+            public static int TranslateProdCode(int ID)
+            {
+                try
+                {
+                    foreach (var Prod in Fuels)
+                    {
+                        if (Prod.Value.ID == ID)
+                            return Prod.Value.InternalCode;
                     }
                 }
-                return i;
+                catch { }
+                return -1;
+            }
+            #endregion
+
+        }
+
+        public Form1()
+        {
+            InitializeComponent();
+            EndFilling = button3;
+        }
+
+        public static Button EndFilling;
+        public static double Quantity = 0;
+        public static double Price = 0;
+        public static double Amount = 0;
+
+        public void log(string txt)
+        {
+            label1.Text += txt;
+            return;
+            string path = @"app_log.log";
+            // This text is added only once to the file.
+            if (!File.Exists(path))
+            {
+                // Create a file to write to.
+                using (StreamWriter sw = File.CreateText(path))
+                {
+                    sw.WriteLine(txt);
+                }
+            }
+            else using (StreamWriter sw = File.AppendText(path))
+            {
+                sw.WriteLine(txt);
+            }
+        }
+        public delegate void InvokeEndFillingDelegate();
+        public delegate void InvokeLogDelegate(string text);
+        private void button1_Click(object sender, EventArgs e)
+        {
+            //IntPtr ctxSrc = Marshal.AllocCoTaskMem(Marshal.SizeOf(this));
+            //Marshal.StructureToPtr(this, ctxSrc, false);
+            DebithThread.DebitCallback =
+                (long TransactID) =>
+                {
+                    IntPtr ATransPtr = Marshal.AllocHGlobal(36);
+
+                    //log("Получение ниформации о заказе, TransactID: " + TransactID + "\r\n");
+                    Driver.GetTransaction(TransactID, ATransPtr);
+                    TransactionInfo ATrans = Driver.GetTransactionInfo(TransactID, ATransPtr);
+                    if (ATrans != null)
+                    {
+                        //Marshal.PtrToStructure(ATransPtr, ATrans);
+                        string Eof2 = "0";
+                        string orderMode = "0";
+                        if (ATrans.OrderInMoney == 1)
+                        {
+                            orderMode = "Денежный заказ";
+                        }
+                        else
+                        {
+                            orderMode = "Литровый заказ";
+                        }
+
+                        Quantity = (float)ATrans.Quantity / 1000;
+                        Price = (float)ATrans.Price / 100;
+                        Amount = (float)ATrans.Amount / 100;
+
+                        label1.BeginInvoke(new InvokeLogDelegate(log),
+                            "ТРК:            " + ATrans.Pump
+                            + "\r\nОснование:      " + ATrans.PaymentCode
+                            + "\r\nПродукт:        " + ATrans.Fuel
+                            + "\r\nРежим заказа:   " + orderMode
+                            + "\r\nКоличество:     " + Quantity
+                            + "\r\nЦена:           " + Price
+                            + "\r\nСумма:          " + Amount
+                            + "\r\nНомер карты:    " + ATrans.CardNum
+                            + "\r\nRRN Транзакции: " + ATrans.RRN
+                            + "\r\n---------------------------"
+                            + "\r\n\r\n");
+
+/*
+                        EBitBtn8->Enabled = true;
+                        ss << TransactID;
+                        EMaskEdit1->Text = ss.str().c_str();
+                        ss.str(std::string());
+                        ss << ((float)ATrans.Quantity / 1000);
+                        EMaskEdit2->Text = ss.str().c_str();
+                        ss.str(std::string());
+                        ss << ((float)ATrans.Price / 100);
+                        EMaskEdit3->Text = ss.str().c_str();
+                        ss.str(std::string());
+                        ss << ((float)ATrans.Amount / 100);
+                        EMaskEdit4->Text = ss.str().c_str();
+                        ss.str(std::string());
+
+                        AmountMem = ATrans.Amount;
+                        VolumeMem = ATrans.Quantity;
+                        PriceMem = ATrans.Price;
+*/
+                        //EndFilling.Enabled = true;
+                        EndFilling.BeginInvoke(new InvokeEndFillingDelegate(EndFillingEnabled));
+                        return true;
+                    }
+                    return false;
+                };
+            Thread myThread = new Thread(DebithThread.Execute);
+            myThread.Start(); // запускаем поток
+
+            try
+            {
+                if (Driver.Open(
+                        (int Pump, int CardType, IntPtr ctx) =>
+                        {
+                            ++Driver.TransCounter;
+                            log("Установка дозы на ТРК: " + Pump + " , сгенерирован TransID: " + Driver.TransCounter + "\r\n");
+                            //label1.Text += "Установка дозы на ТРК: " + Pump + " , сгенерирован TransID: " +
+                            //               Driver.TransCounter + "\r\n";
+                            DebithThread.SetTransID(Driver.TransCounter);
+                            return Driver.TransCounter;
+                        },
+                        (long Pump, IntPtr ctx) =>
+                        {
+                            Driver.GetPumpStateResponce resp;
+
+                            log("Запрос состояние ТРК: " + Pump + "\r\n");
+                            //label1.Text += "Запрос состояние ТРК: " + Pump + "\r\n";
+                            //DispStatus:
+                            //	0 - ТРК онлайн(при этом TransID должен = -1, иначе данный статус воспринимается как 3)
+                            //	1 - ТРК заблокирована
+                            //	3 - Осуществляется отпуск топлива
+                            //	10 - ТРК занята
+                            resp.DispStatus = 0;
+                            // StateFlags - всегда 0
+                            resp.StateFlags = 0;
+                            // ErrorCode - код ошибки
+                            resp.ErrorCode = 0;
+                            // DispMode - всегда 0
+                            resp.DispMode = 0;
+                            // UpNozz - номер снятого пистолета, не обязательный параметр для заполнения
+                            // допускается 0
+                            resp.UpNozz = 1;
+                            // UpFuel - продукт снятого пистолета
+                            resp.UpFuel = 95;
+                            // UpTank - Номер емкости, к которой привязан снятый пистолет
+                            //не обязательный параметр для заполнения допускается 0
+                            resp.UpTank = 0;
+                            // TransID - Номер транзакции
+                            // в случае, если на ТРК отсутствует заказ: '-1'
+                            resp.TransID = -1;
+                            //PreselMode - режим заказа установленного на ТРК
+                            //0 - литровый заказ
+                            //1 - денежный заказ
+                            resp.PreselMode = 0;
+                            //PreselDose - сумма заказа установленного на ТРК,
+                            //  в случае 'PreselMode = 0' - кол-во литров
+                            //  в случае 'PreselMode = 1' - сумма в рублях
+                            resp.PreselDose = 0;
+                            //PreselDose - цена за лит топлива для заказа установленного на ТРК
+                            resp.PreselPice = 0;
+                            //PreselFuel - продукт заказа установленного на ТРК,
+                            resp.PreselFuel = 0;
+                            //PreselFullTank - если True, на ТРК установлен заказ до полного бака
+                            resp.PreselFullTank = 0;
+                            //FillingVolume - данные дисплея ТРК кол-во.
+                            resp.FillingVolume = 0;
+                            //FillingVolume - данные дисплея ТРК цена.
+                            resp.FillingPrice = 0;
+                            //FillingVolume - данные дисплея ТРК сумма.
+                            resp.FillingSum = 0;
+
+                            IntPtr respPtr = Marshal.AllocCoTaskMem(Marshal.SizeOf(resp));
+                            Marshal.StructureToPtr(resp, respPtr, false);
+
+                            return resp;
+
+                        },
+                        (long TransID, IntPtr ctx) =>
+                        {
+                            log("Отмена транзакции: TransactID: " + TransID + "\r\n");
+                            //label1.Text += "Отмена транзакции: TransactID: " + TransID + "\r\n";
+
+                            Driver.VolumeMem = 0;
+                            Driver.AmountMem = 0;
+                            //EBitBtn8->Enabled = false;
+                            Driver.FillingOver(Driver.TransCounter, Driver.VolumeMem, Driver.AmountMem);
+
+                            log("Налив успешно завершен" + "\r\n");
+                            //label1.Text += "Налив успешно завершен" + "\r\n";
+
+                            Driver.PriceMem = 0;
+                            return 1;
+                        },
+                        (int Pump, byte ReleasePump, IntPtr ctx) =>
+                        {
+                                if (ReleasePump == 0)
+                                {
+                                    log("Захват ТРК: " + Pump + "\r\n");
+                                    //label1.Text += "Захват ТРК: " + Pump + "\r\n";
+                                    return 1;
+                                }
+                                else
+                                {
+                                    log("Освобождение ТРК: " + Pump + "\r\n");
+                                    //label1.Text += "Освобождение ТРК: " + Pump + "\r\n";
+                                    return 1;
+                                }
+                        },
+                        (int Amount, int Price, long Trans_ID, int DiscountMoney, IntPtr ctx) =>
+                        {
+                            log("Пересчет заказа, TransID: " + Trans_ID + "\r\n"
+                            + "Новая цена:   " + (float)Price / 100 + "\r\n"
+                            + "Новая сумма:  " + (float)Amount / 100 + "\r\n"
+                            + "Новая скидка: " + (float)DiscountMoney / 100 + "\r\n"
+                            + "\r\n");
+
+                            //label1.Text += "Пересчет заказа, TransID: " + Trans_ID + "\r\n"
+                            //    + "Новая цена:   " + (float) Price/100 + "\r\n"
+                            //    + "Новая сумма:  " + (float) Amount/100 + "\r\n"
+                            //    + "Новая скидка: " + (float) DiscountMoney/100 + "\r\n"
+                            //    + "\r\n";
+                            return 1;
+                        },
+                        (long _DateTime, string CardNo, int CardType, long Trans_ID, IntPtr ctx) =>
+                        {
+                                //SYSTEMTIME time;
+                                //VariantTimeToSystemTime(_DateTime, &time);
+
+                                log("Сохранение информации о доп карте, TransID: " + Trans_ID + "\r\n"
+                                //+ "Дата/Время транзакции: " + time.wYear + "-" + time.wMonth + "-" + time.wDay + " " + time.wHour + ":" + time.wMinute + ":" + time.wSecond + "\r\n"
+                                + "Дата/Время транзакции: " + _DateTime + "\r\n"
+                                + "Номер карты:           " + CardNo + "\r\n"
+                                + "Тип карты:             " + CardType + "\r\n"
+                                + "\r\n");
+
+                                //label1.Text += "Сохранение информации о доп карте, TransID: " + Trans_ID + "\r\n"
+                                //+ "Дата/Время транзакции: " + time.wYear + "-" + time.wMonth + "-" + time.wDay + " " + time.wHour + ":" + time.wMinute + ":" + time.wSecond + "\r\n"
+                                //+ "Дата/Время транзакции: " + _DateTime + "\r\n"
+                               // + "Номер карты:           " + CardNo + "\r\n"
+                                //+ "Тип карты:             " + CardType + "\r\n"
+                                //+ "\r\n";
+                                return 1;
+                        },
+                        (string RecieptText, long _DateTime, string DeviceName, string DeviceSerial,
+                                int DocNo, int DocType, int Amount, int VarCheck, string DocKind, int DocKindCode,
+                                int PayType, int FactDoc, int BP_Product, long Trans_ID, IntPtr ctx) =>
+                            {
+                                //SYSTEMTIME time;
+                                //VariantTimeToSystemTime(_DateTime, &time);
+
+                                log("Сохранение документа, TransID: " + Trans_ID
+                                + "\r\nДата/время:         " + _DateTime//time.wYear + "-" + time.wMonth + "-" + time.wDay + " " + time.wHour + ":" + time.wMinute + ":" + time.wSecond
+                                + "\r\nИмя устройства:     " + DeviceName
+                                + "\r\nСерийный номер:     " + DeviceSerial
+                                + "\r\nНомер документа:    " + DocNo
+                                + "\r\nТип документа:      " + DocType
+                                + "\r\nСумма:              " + (float)Amount / 100
+                                + "\r\nПроизвольный чек:   " + VarCheck
+                                + "\r\nВид документа:      " + DocKind
+                                + "\r\nКод вида документа: " + DocKindCode
+                                + "\r\nТип оплаты:         " + PayType
+                                + "\r\nЧек по факту:       " + FactDoc
+                                + "\r\nНомер продукта:     " + BP_Product
+                                + "\r\nID Транзакции:      " + Trans_ID
+                                + "\r\n------------------------------------------------------"
+                                + "\r\nОбраз Чека:         "
+                                + "\r\n" + RecieptText
+                                + "\r\n------------------------------------------------------"
+                                + "\r\n");
+                                return 1;
+                            },
+                        "Sample Control", IntPtr.Zero/*ctxSrc*/) != 1
+                )
+                {
+                    log("Ошибка подключения драйвера" + "\r\n");
+                    //label1.Text += "Ошибка подключения драйвера" + "\r\n";
+                        return;
+                }
+                else
+                {
+                    log(Driver.Description() + "\r\n");
+                    //label1.Text += Driver.Description() + "\r\n";
+                }
+
+                //           //Ïðîâåðÿåì íàéäåíà ëè â äðàéâåðå ôóíêöèÿ FuelPrices è âûïîëíÿåì óñòàíîâêó öåí íà òîïëèâî. Äàëåå ïðè êàæäîé ñìåíå öåíû
+                //           //íåîáõîäèìî äîïîëíèòåëüíî âûçûâàòü FuelPrices è ïåðåäàâàòü öåíû. Ïðè ýòîì ïðè èçìåíåíèè äàæå îäíîé öåíû, íåîáõîäèìî
+                //           //îáíîâëÿòü âåñü ñïèñîê öåí.
+                //           //Öåíû ïåðåäàþòñÿ â âèäå ñòðîêè ñ ðàçäåëèòåëÿìè :
+                //           //çàïèñåé: ';',
+                //           //ïîëåé : '=',
+                //           //â ñëåäóþùåì ôîðìàòå :
+                //           //
+                //           //êîä_ïðîäóêòà = íàèìåíîâàíèå_âèäà_òîïëèâà = öåíà = ïîðÿäêîâûé_íîìåð_ïðîäóêòà_â_ñèñòåìå;
+                //           //
+                //           //Íàïðèìåð:
+                //           //80 = ÀÈ - 80 = 28, 8 = 3
+                //           //
+                //           //80 - Êîä ïðîäóêòà
+                //           //ÀÈ - 80 - Íàèìåíîâàíèå ïðîäóêòà
+                //           //28, 8 - Öåíà îäíîãî ëèòðà ïðîäóêòà
+                //           //3 - Ïîðÿäêîâûé íîìåð ïðîäóêòà â ñèñòåìå
+
+                //           ss.str(std::string());
+                //           log("\r\n" + "Âûïîëíÿåì óñòàíîâêó öåí íà òîïëèâî" + "\r\n");
+                //           EMemo1->Lines->Append(ss.str().c_str());
+                //           ss.str(std::string());
+                //           if (FSmartPumpControlLink->FuelPrices != 0)
+                int OS = Environment.OSVersion.Version.Major;
+                log("OS Ver - " + Environment.OSVersion.Version + "\r\n");
+                if (OS > 4)
+                    Driver.FuelPrices("95=Аи-95-К5=36,2=1;92=Аи-92-К5=32,23=2;80=Аи-80=28,8=3");
+                else
+                    Driver.FuelPrices("95=Аи-95-К5=36=1;92=Аи-92-К5=32=2;80=Аи-80=28=3");
+                //           //Ïðîâåðÿåì íàéäåíà ëè â äðàéâåðå ôóíêöèÿ PumpFuels è âûïîëíÿåì ïðèâÿçêó ÒÐÊ ê âèäàì òîïëèâà.
+                //           //Ñîîòâåòñòâèå  ïåðåäàþòñÿ â âèäå ñòðîêè ñ ðàçäåëèòåëÿìè :
+                //           //çàïèñåé: ';',
+                //           //ïîëåé : '=',
+                //           //ñïèñêà âíóòðè ïîëÿ : ',',
+                //           //â ñëåäóþùåì ôîðìàòå :
+                //           //
+                //           //íîìåð_òðê = êîä_ïðîäóêòà_1, êîä_ïðîäóêòà_2, ..., êîä_ïðîäóêòà_n;
+                //           //
+                //           //Íàïðèìåð:
+                //           //1 = 95, 92, 80
+                //           //1 - Íîìåð ÒÐÊ
+                //           //95, 92, 80 - Êîäû ïðîäóêòîâ äîñòóïíûõ íà äàííîé ÒÐÊ
+
+                //           log("Âûïîëíÿåì ïðèâÿçêó ÒÐÊ ê âèäàì òîïëèâà" + "\r\n");
+                //           EMemo1->Lines->Append(ss.str().c_str());
+                //           ss.str(std::string());
+                //           if (FSmartPumpControlLink->PumpFuels != 0)
+  //              if (OS > 4)
+                    Driver.PumpFuels("1=95,92,80;2=80,95,92;3=92,95;4=95,92");
+  //              else
+  //                  Driver.PumpFuels("1=95.92.80;2=95.92.80;3=95.92;4=95.92");
+                //           EBitBtn1->Enabled = false;
+                //           EBitBtn2->Enabled = true;
+                //           EBitBtn3->Enabled = true;
+                //           EBitBtn4->Enabled = true;
+                //           EBitBtn5->Enabled = true;
+                //           EBitBtn6->Enabled = true;
+
+                //           log(FSmartPumpControlLink->Description() + " óñïåøíî îòêðûòà" + "\r\n" + "\r\n");
+                //           EMemo1->Lines->Append(ss.str().c_str());
+                //           EMemo1->Lines->Append("");
+                //           ss.str(std::string());
+                log(Driver.Description() + " успешно открыта!\r\n");
+                //label1.Text += Driver.Description() + " успешно открыта!\r\n";
+                //       }
+                //catch (Excet)
+                //{
+                //	log("Îøèáêà èíèöèàëèçàöèè áèáëèîòåêè" + "\r\n");
+                //	EMemo1->Lines->Append(ss.str().c_str());
+                //	EMemo1->Lines->Append("");
+                //       ss.str(std::string());
+                //}
+            }
+            catch (Exception ex)
+            {
+                log($"Ошибка инициализации библиотеки {Driver.Description()}:{ex}\r\n");
+                //label1.Text += $"Ошибка инициализации библиотеки {Driver.Description()}:{ex}\r\n";
             }
         }
 
-
-    public Form1()
+        private void button2_Click(object sender, EventArgs e)
         {
-            InitializeComponent();
+            label1.Text = string.Empty;
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void button3_Click(object sender, EventArgs e)
         {
+            Driver.FillingOver(Driver.TransCounter, (int)(Quantity/**1000*/), (int)(Price * Quantity /** 90*/ / 10) /*(int)(Amount *100)*/);
+            log("\r\nНалив успешно завершен!" +
+                $"\r\nколво {(int)(Quantity /** 1000*/)} объем {(int)(Price * Quantity /** 90*/ / 10)}");
+            Price = 0;
+            button3.Enabled = false;
+        }
 
+        public void EndFillingEnabled()
+        {
+            EndFilling.Enabled = true;
+        }
+        public void EndFillingDisabled()
+        {
+            EndFilling.Enabled = false;
         }
     }
 }
