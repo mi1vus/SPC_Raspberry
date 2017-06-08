@@ -113,7 +113,7 @@ namespace SmartPumpControlRemote
                 else
                     RunCmd.ShowDialog(commands);
 
-                this.Close();
+                Close();
             }
             catch { }
         }
@@ -161,7 +161,7 @@ namespace SmartPumpControlRemote
         }
         private void button_exit_Click(object sender, EventArgs e)
         {
-            this.Close();
+            Close();
         }
     }
 }

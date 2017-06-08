@@ -9,7 +9,7 @@ namespace SmartPumpControlRemote
         public string tid
         {
             get { return _tid; }
-            set { _tid = value; this.Text = "Обслуживание \"" + tid+"\""; }
+            set { _tid = value; Text = "Обслуживание \"" + tid+"\""; }
 
         }
         public QuickLaunch()
@@ -80,7 +80,7 @@ namespace SmartPumpControlRemote
 
         private void button_exit_Click(object sender, EventArgs e)
         {
-            this.Close();
+            Close();
         }
 
         private void button1_Click(object sender, EventArgs e)

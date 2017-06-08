@@ -27,8 +27,8 @@ namespace SmartPumpControlRemote
 
         private void button_ok_Click(object sender, EventArgs e)
         {
-            this.DialogResult = DialogResult.OK;
-            this.Close();
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         private void button_cancel_Click(object sender, EventArgs e)
@@ -38,8 +38,8 @@ namespace SmartPumpControlRemote
             //if (result == DialogResult.Yes)
             //{
                 
-                this.DialogResult = DialogResult.Cancel;
-                this.Close();
+                DialogResult = DialogResult.Cancel;
+                Close();
             //}
         }
 
@@ -47,12 +47,12 @@ namespace SmartPumpControlRemote
         {
             if (parameters.Count <= 10)
             {
-                this.Height = 127 + (30 * parameters.Count);
+                Height = 127 + (30 * parameters.Count);
             }
             else
             {
-                this.Height = 127 + (30 * parameters.Count);
-                this.Width = 470;
+                Height = 127 + (30 * parameters.Count);
+                Width = 470;
             }
         }
         public static RunCmd.Cmd SetParams(RunCmd.Cmd cmd, bool hide_checkBox_requestAlways = true)

@@ -52,7 +52,7 @@ namespace SmartPumpControlRemote
                     }
                     updateInfo();
                     if (!error && ExitOnSuccess)
-                        this.Close();
+                        Close();
                 }
                 catch { }
             }).Start();
@@ -84,9 +84,9 @@ namespace SmartPumpControlRemote
         delegate void Void();
         private void updateInfo()
         {
-            if (this.InvokeRequired)
+            if (InvokeRequired)
             {
-                this.Invoke(new Void(updateInfo));
+                Invoke(new Void(updateInfo));
             }
             else
             {
@@ -200,7 +200,7 @@ namespace SmartPumpControlRemote
 
         private void button_exit_Click(object sender, EventArgs e)
         {
-            this.Close();
+            Close();
         }
 
         private void button_retry_Click(object sender, EventArgs e)

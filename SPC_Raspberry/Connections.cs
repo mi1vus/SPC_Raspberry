@@ -99,7 +99,7 @@ namespace SmartPumpControlRemote
             if (e.Clicks > 1)
             {
                 TextBox tbox = new TextBox();
-                this.Controls.Add(tbox);
+                Controls.Add(tbox);
                 tbox.Width = listView1.Columns[editable_column].Width;
                 ListViewItem item = listView1.GetItemAt(0, e.Y);
                 if (item != null)

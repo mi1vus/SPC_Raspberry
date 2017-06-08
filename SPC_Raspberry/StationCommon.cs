@@ -29,8 +29,7 @@ namespace BenzuberServer
             public string ToXmlString()
             {
                 var xmlSerializer = new XmlSerializer(GetType());
-
-
+                
                 using (var textWriter = new Utf8StringWriter())
                 {
                     xmlSerializer.Serialize(textWriter, this);
@@ -44,10 +43,8 @@ namespace BenzuberServer
                 {
                     return (ResultType)xmlSerializer.Deserialize(stringReader);
                 }
-
             }
         }
-
 
         [XmlRoot("StationInformaton")]
         public class StationInformaton : XML_Serializator
@@ -101,7 +98,7 @@ namespace BenzuberServer
             [OperationContract]
             int OnDebitPump(int PumpNum, int Fuel, string TransID, decimal Amount);
             [OperationContract]
-            StationGate.StationInformaton GetStationInfo();
+            StationInformaton GetStationInfo();
             [OperationContract]
             void OnPingOK();
             [OperationContract]

@@ -104,13 +104,13 @@ namespace ProjectSummer.Repository
         {
             this.LogEnable = LogEnable;
             this.LogLevel = LogLevel;
-            this.LastArchiveClear = DateTime.Now.Date.AddDays(-1);
-            this.ArchiveDepth = 60;
+            LastArchiveClear = DateTime.Now.Date.AddDays(-1);
+            ArchiveDepth = 60;
 
-            if (ModuleName != System.IO.Path.GetFullPath(ModuleName))
+            if (ModuleName != Path.GetFullPath(ModuleName))
             {
                 LoggerName = ModuleName;
-                path = System.IO.Path.GetFullPath(System.IO.Path.Combine(path, ModuleName));
+                path = Path.GetFullPath(Path.Combine(path, ModuleName));
             }
             else
             {
@@ -133,13 +133,13 @@ namespace ProjectSummer.Repository
                     fileName = GetFileName(DateTime.Today);
                 lock (fileName)
                 {
-                    if (!System.IO.Directory.Exists(path))
-                        System.IO.Directory.CreateDirectory(path);
+                    if (!Directory.Exists(path))
+                        Directory.CreateDirectory(path);
                     
 
                     using (FileStream fileSteam = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete | FileShare.Read | FileShare.Write))
                     {
-                        using (System.IO.StreamWriter str = new StreamWriter(fileSteam, Encoding.Unicode))
+                        using (StreamWriter str = new StreamWriter(fileSteam, Encoding.Unicode))
                         {
                             lock (logMemory)
                             {
@@ -270,14 +270,14 @@ namespace ProjectSummer.Repository
             string strret = "";
             try
             {
-                if (!System.IO.Directory.Exists(path))
-                    System.IO.Directory.CreateDirectory(path);
+                if (!Directory.Exists(path))
+                    Directory.CreateDirectory(path);
                 string fileName = GetFileName(dTime);
                 if (!File.Exists(fileName))
                     return "";
                 using (FileStream fileSteam = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 {
-                    using (System.IO.StreamReader str = new StreamReader(fileSteam, Encoding.Unicode))
+                    using (StreamReader str = new StreamReader(fileSteam, Encoding.Unicode))
                     {
                         strret = str.ReadToEnd();
                         fileSteam.Close();

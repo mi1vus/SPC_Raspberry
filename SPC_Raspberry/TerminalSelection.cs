@@ -44,7 +44,7 @@ namespace SmartPumpControlRemote
             if(sender is Button)
             {
                 SelectionResult = ((Button)sender).Text;
-                this.Close();
+                Close();
             }
         }
         public static string SelectTerminal(string[] TIDS)
@@ -57,7 +57,7 @@ namespace SmartPumpControlRemote
         private void button1_Click_1(object sender, EventArgs e)
         {
             SelectionResult = "";
-            this.Close();
+            Close();
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -69,9 +69,9 @@ namespace SmartPumpControlRemote
             foreach (var TID in tids)
             {
                 Shell.setIP(TID);
-                var par = new ProjectSummer.Repository.Serialization.SerializableDictionary<string, string>();
+                var par = new Serialization.SerializableDictionary<string, string>();
                 par.Add("Текст блокировки", (unlock)?"":"Терминал заблокирован");
-                var parv = new ProjectSummer.Repository.Serialization.SerializableDictionary<string, string[]>();
+                var parv = new Serialization.SerializableDictionary<string, string[]>();
                 parv.Add("Текст блокировки", new string[0]);
                 RunCmd.Cmd cmd = new RunCmd.Cmd() { Device = "CoreDevice", DeviceInfo = "Система", Command = "Блокировка терминала", Params = par, RequestParamsAlways = false, ParamsVals = parv };
                 
@@ -96,7 +96,7 @@ namespace SmartPumpControlRemote
             if (listView1.SelectedItems.Count > 0)
             {
                 SelectionResult = listView1.SelectedItems[0].Name;
-                this.Close();
+                Close();
             }
         }
 
@@ -105,7 +105,7 @@ namespace SmartPumpControlRemote
             if (listView1.SelectedItems.Count > 0)
             {
                 SelectionResult = listView1.SelectedItems[0].Name;
-                this.Close();
+                Close();
             }
         }
 

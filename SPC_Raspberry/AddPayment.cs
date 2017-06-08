@@ -12,7 +12,7 @@ namespace SmartPumpControlRemote
 
         private void button1_Click(object sender, EventArgs e)
         {
-            this.DialogResult = DialogResult.Cancel;
+            DialogResult = DialogResult.Cancel;
             Close();
         }
 
@@ -24,7 +24,7 @@ namespace SmartPumpControlRemote
             }
             else
             {
-                this.DialogResult = DialogResult.OK;
+                DialogResult = DialogResult.OK;
                 Close();
             }
         }

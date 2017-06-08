@@ -321,18 +321,18 @@ namespace ProjectSummer.Repository
             this.ModuleName = ModuleName;
             this.NameValueSeparator = NameValueSeparator;
 
-            this.FileName = Path.GetFullPath(Path.Combine(ConfigDirectory, this.ModuleName + ".conf"));
-            this.values = initFromFile(this.FileName);
+            FileName = Path.GetFullPath(Path.Combine(ConfigDirectory, this.ModuleName + ".conf"));
+            values = initFromFile(FileName);
 
-            this.ModuleNameDescription = values.ContainsKey("#name_description") ? string.Format("{0} [{1}]", values["#name_description"], this.ModuleName) : this.ModuleName;
+            ModuleNameDescription = values.ContainsKey("#name_description") ? string.Format("{0} [{1}]", values["#name_description"], this.ModuleName) : this.ModuleName;
 
-            this.DescriptionFileName = ((values.ContainsKey("#description") && values["#description"]!="") ? values["#description"] : this.FileName + "_scheme");
-            if(this.DescriptionFileName != Path.GetFullPath(DescriptionFileName))
-                this.DescriptionFileName = Path.GetFullPath(Path.Combine(ConfigDirectory, DescriptionFileName));
+            DescriptionFileName = ((values.ContainsKey("#description") && values["#description"]!="") ? values["#description"] : FileName + "_scheme");
+            if(DescriptionFileName != Path.GetFullPath(DescriptionFileName))
+                DescriptionFileName = Path.GetFullPath(Path.Combine(ConfigDirectory, DescriptionFileName));
 
-            if(File.Exists(this.DescriptionFileName))
+            if(File.Exists(DescriptionFileName))
             {
-                descriptions = initFromFile(this.DescriptionFileName);
+                descriptions = initFromFile(DescriptionFileName);
 
                 foreach (var item in descriptions)
                 {
@@ -360,7 +360,7 @@ namespace ProjectSummer.Repository
         public bool Save()
         {
             //Save(this.DescriptionFileName, descriptions);
-            return Save(this.FileName, this.values);
+            return Save(FileName, values);
         }
 
         /// <summary>
@@ -380,7 +380,7 @@ namespace ProjectSummer.Repository
                     var path = new FileInfo(FileName).DirectoryName;
                     if (!Directory.Exists(path))
                         Directory.CreateDirectory(path);
-                    using (var txt = new System.IO.StreamWriter(FileName, false, Encoding.Unicode))
+                    using (var txt = new StreamWriter(FileName, false, Encoding.Unicode))
                     {
                         lock (values)
                         {
@@ -493,7 +493,7 @@ namespace ProjectSummer.Repository
             }
             if (!values.ContainsKey(Description.ID))
                 values[Description.ID] = "";
-            var ret = Save(this.DescriptionFileName, descriptions);
+            var ret = Save(DescriptionFileName, descriptions);
             RaisePropertyChanged(ValueName, Description.ID);
             return ret;
         }

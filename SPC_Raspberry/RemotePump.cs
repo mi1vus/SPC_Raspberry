@@ -7,6 +7,7 @@ using System.ServiceModel.Channels;
 using System.IdentityModel.Selectors;
 using System.IdentityModel.Tokens;
 using System.Windows.Forms;
+using ProjectSummer.Repository;
 using SPC_Raspberry;
 
 namespace RemotePump_Driver
@@ -21,7 +22,7 @@ namespace RemotePump_Driver
                 return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             }
         }
-        static ProjectSummer.Repository.Logger log = new ProjectSummer.Repository.Logger("RemotePump");
+        static Logger log = new Logger("RemotePump");
         public RemotePump()
         {
             TID = DateTime.Now.ToString();
@@ -52,8 +53,9 @@ namespace RemotePump_Driver
                 MessageProperties prop = context.IncomingMessageProperties;
                 RemoteEndpointMessageProperty endpoint = prop[RemoteEndpointMessageProperty.Name] as RemoteEndpointMessageProperty;
                 //получаем IP клиента.
-                string ipAddr = endpoint.Address;
-                TID = (_TID != null && _TID != "")?_TID:ipAddr;
+                var config = ConfigMemory.GetConfigMemory("Client");
+                string ipAddr = config["ip"];//endpoint.Address;
+                TID = !string.IsNullOrWhiteSpace(_TID)?_TID:ipAddr;
                 SmartPumpControlRemote.Shell.AddTerminal(TID, ipAddr);
                 log.WriteFormated("Connected: {0}, from: {1}", TID, ipAddr);
                 return true;
@@ -63,7 +65,6 @@ namespace RemotePump_Driver
                 log.WriteFormated(ex.ToString());
             }
             return false;
-          
         }
         private object busy_flag = new object();
  
@@ -129,7 +130,7 @@ namespace RemotePump_Driver
             {
                 if (host == null)
                 {
-                    var uri = new Uri("net.tcp://localhost:"+port.ToString());
+                    var uri = new Uri("net.tcp://localhost:"+port);
                     var binding = new NetTcpBinding(SecurityMode.None);
                     binding.Security.Message.ClientCredentialType = MessageCredentialType.None;
                     binding.Security.Transport.ClientCredentialType = TcpClientCredentialType.None;
@@ -144,7 +145,7 @@ namespace RemotePump_Driver
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show(ex.Message);
+                MessageBox.Show(ex.Message);
             }
         }
         private string TID;
@@ -157,10 +158,8 @@ namespace RemotePump_Driver
                 {
                     if (fillingOvers.ContainsKey(TID))
                     {
-
                         // main.log.Write(TID+" fillingOvers.Count=" + fillingOvers[TID].Count);
                         ret = fillingOvers[TID].ToArray();
-         
 
                         fillingOvers[TID].Clear();
                     }
@@ -449,7 +448,7 @@ namespace RemotePump_Driver
 
        //     bool result = false;
 #warning Дописать обработку разблокировки ТРК
-            if (true)//main.callback_ReleasePump(PumpNo))
+            if (Form1.Driver.HoldPump(PumpNo, true))//true)//main.callback_ReleasePump(PumpNo))
             {
                 try
                 {
@@ -458,6 +457,7 @@ namespace RemotePump_Driver
                 catch { }
                 return true;
             }
+            return false;
         }
         public OrderInfo GetDoseInfo(string OrderRRN)
         {
