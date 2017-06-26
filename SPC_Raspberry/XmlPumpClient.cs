@@ -6,11 +6,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
-using SmartPumpControlRemote;
 
 namespace SPC_Raspberry
 {
@@ -872,139 +870,121 @@ $"    <Pump PumpNumber=\"{PumpId}\">\r\n" +
 
         public static bool Authorize(int TerminalId, int PumpId, long RequestID, int NozzleAllowed, int NozzleNumber, string RNN, int DeliveryLimit, DELIVERY_UNIT DeliveryUnit, int timeout = 3000)
         {
-            bool next;
-            lock (answers)
-                answers.RemoveAll(t =>
-                t is PumpResponse
-                && ((PumpResponse) t).PumpObj.PumpNumber == PumpId
-                && string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
+            bool next = false;
+            List<object> item  = null;
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    item?.RemoveAll(t =>
+                    string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
 
             PumpRequestAuthorize(TerminalId, PumpId, RequestID, NozzleAllowed, NozzleNumber, RNN, DeliveryLimit, DeliveryUnit);
 
-            lock (answers)
-                next = !answers.Any(t =>
-                    t is PumpResponse
-                    && ((PumpResponse) t).PumpObj.PumpNumber == PumpId
-                    && string.Compare(((PumpResponse) t).RequestType, "Authorize", StringComparison.Ordinal) == 0
-            );
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    next = !item.Any(t => 
+                    string.Compare(((PumpResponse) t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
             while (timeout > 0 && next)
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (answers)
-                    next = !answers.Any(t =>
-                    t is PumpResponse
-                    && ((PumpResponse)t).PumpObj.PumpNumber == PumpId
-                    && string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0
-                );
+                lock (statuses)
+                    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                        next = !item.Any(t =>
+                        string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
             }
 
             if (timeout <= 0)
                 return false;
-            PumpResponse authorizeResponse = null;
-            lock (answers)
-                authorizeResponse = (PumpResponse)answers.Last(t =>
-                t is PumpResponse
-                && ((PumpResponse) t).PumpObj.PumpNumber == PumpId
-                && string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0
-                );
 
-            return authorizeResponse.PumpObj.PumpStatus.Error == null;
+            PumpResponse authorizeResponse = null;
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    authorizeResponse = (PumpResponse)item.Last(t =>
+                    string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
+
+            return authorizeResponse?.PumpObj.PumpStatus.Error == null;
         }
 
-        public static OnPumpStatusChange EndFilling(int PumpId, int timeout = 60000)
+        public static OnPumpStatusChange EndFilling(int PumpId, string rnn, int timeout = 60000)
         {
-            bool next;
-            lock (answers)
-            answers.RemoveAll(t =>
-                t is OnPumpStatusChange
-                && (t as OnPumpStatusChange).PumpNo == PumpId);
+            bool next = false;
+            List<object> item = null;
+            //lock (statuses)
+            //    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange), out item))
+            //        item.RemoveAll(t =>t is OnPumpStatusChange);
 
-            lock (answers)
-                next = !answers.Any(t =>
-                    t is OnPumpStatusChange
-                    && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING
-                    && ((OnPumpStatusChange) t).PumpNo == PumpId
-            );
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
+                    next = !item.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
+                    && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
 
             while (timeout > 0 && next)
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (answers)
-                    next = !answers.Any(t =>
-                    t is OnPumpStatusChange
-                    && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING
-                    && ((OnPumpStatusChange)t).PumpNo == PumpId
-            );
+                lock (statuses)
+                    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
+                        next = !item.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
+                        && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
             }
             if (timeout <= 0)
                 return null;
 
             OnPumpStatusChange result = null;
-            lock (answers)
-                result = (OnPumpStatusChange) answers.Last(t =>
-                        t is OnPumpStatusChange
-                        && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING
-                        && ((OnPumpStatusChange) t).PumpNo == PumpId
-                );
-                return result;
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
+                    result = (OnPumpStatusChange)item.Last(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
+                        && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
+            return result;
         }
 
         public static bool Collect(int TerminalId, int PumpId, long RequestID, string RNN, int timeout = 3000)
         {
-            bool next;
-            lock (answers)
-                answers.RemoveAll(t =>
-                t is PumpResponse
-                && ((PumpResponse)t).PumpObj.PumpNumber == PumpId
-                && string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
+            bool next = false;
+            List<object> item = null;
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    item?.RemoveAll(t => 
+                    string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
 
             PumpRequestCollect(TerminalId, PumpId, RequestID, RNN);
 
-            lock (answers)
-                next = !answers.Any(t =>
-                        t is PumpResponse
-                        && ((PumpResponse) t).PumpObj.PumpNumber == PumpId
-                        && string.Compare(((PumpResponse) t).RequestType, "Collect", StringComparison.Ordinal) == 0
-                );
-
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    next = !item.Any(t =>
+                    string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
             while (timeout > 0 && next)
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (answers)
-                    next = !answers.Any(t =>
-                            t is PumpResponse
-                            && ((PumpResponse)t).PumpObj.PumpNumber == PumpId
-                            && string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0
-                    );
+                lock (statuses)
+                    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                        next = !item.Any(t =>
+                        string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
             }
+
             if (timeout <= 0)
                 return false;
 
-            PumpResponse authorizeResponse = null;
-            lock (answers)
-                authorizeResponse = (PumpResponse)answers.Last(t =>
-                t is PumpResponse
-                && ((PumpResponse)t).PumpObj.PumpNumber == PumpId
-                && string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0
-                );
+            PumpResponse collectResponse = null;
+            lock (statuses)
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    collectResponse = (PumpResponse)item.Last(t =>
+                    string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
 
-            return authorizeResponse.PumpObj.PumpStatus.Error == null;
+            return collectResponse?.PumpObj.PumpStatus.Error == null;
         }
 
-        public static void ClearAllTransactionAnswers(int PumpId)
+        public static void ClearAllTransactionAnswers(int PumpId, string RNN)
         {
-            lock (answers)
+            List<object> item = null;
+            lock (statuses)
             {
-                answers.RemoveAll(t =>
-                    t is OnPumpStatusChange
-                    && ((OnPumpStatusChange) t).PumpNo == PumpId);
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                    item.Clear();
 
-                answers.RemoveAll(t =>
-                    t is PumpResponse
-                    && ((PumpResponse) t).PumpObj.PumpNumber == PumpId);
+                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
+                    item.RemoveAll(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, RNN) == 0);
             }
     }
 
