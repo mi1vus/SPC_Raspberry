@@ -301,7 +301,7 @@ namespace SPC_Raspberry
                 {
                     //MessageBox.Show($"Disconnected: error code {e.NativeErrorCode}!");
                     //throw new Exception("ERROR Разрыв соединения с попыткой восстановления!");
-                    File.AppendAllText("exchange.log", $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
+                    File.AppendAllText("exchange2.log", $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
 
                     IPHostEntry hostEntry = null;
 
@@ -357,8 +357,7 @@ namespace SPC_Raspberry
             lock (socket)
                 socket.Send(bytesToSent, bytesToSent.Length, 0);
 
-            File.AppendAllText("exchange.log", $"\r\n********send*********\r\n{message}");
-            //File.AppendAllText("exchange.log", $"\r\n********sendInv*********\r\n{message}");
+            File.AppendAllText("exchange2.log", $"\r\n********send*********\r\n{message}");
 
             Thread.Sleep(timeout);
         }
@@ -409,7 +408,7 @@ namespace SPC_Raspberry
         public static void ReceiveMessageSocket()
         {
             StringBuilder builder = new StringBuilder();
-            File.Delete("exchange.log");
+            File.Delete("exchange2.log");
             while (true)
             {
                 try
@@ -435,7 +434,7 @@ namespace SPC_Raspberry
                     if (builder.Length != 0)
                     {
                         var tmp = builder.ToString();
-                        File.AppendAllText("exchange.log", $"\r\n********recv*********\r\n{tmp}");
+                        File.AppendAllText("exchange2.log", $"\r\n********recv*********\r\n{tmp}");
                         string[] ansverStrings = builder.ToString()
                             .Split(new[] {"<?xml version=\"1.0\"?>"}, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var xml in ansverStrings)
@@ -443,11 +442,11 @@ namespace SPC_Raspberry
                             if (isValidXml(xml))
                             {
                                 builder.Remove(0, xml.Length + 21);
-                                //File.AppendAllText("exchange.log", "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
+                                File.AppendAllText("exchange2.log", "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
                             }
                             else
                             {
-                                File.AppendAllText("exchange.log", $"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
+                                File.AppendAllText("exchange2.log", $"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
                                 continue;
                             }
 

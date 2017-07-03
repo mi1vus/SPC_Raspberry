@@ -2424,15 +2424,16 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                 XmlPumpClient.Collect(terminal, pump.PumpId, Driver.TransCounter, "", XmlPumpClient.WaitAnswerTimeout);
                                 //Thread.Sleep(500);
                                 XmlPumpClient.PumpGetStatus(Driver.terminal, pump.PumpId, 1);
-                                if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pump.PumpId,
-                                    MESSAGE_TYPES.OnPumpStatusChange), out item) && item != null)
-                                    оnPumpStatusChanged = (OnPumpStatusChange)item;
+                                XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pump.PumpId,
+                                    MESSAGE_TYPES.OnPumpStatusChange), out item);
                             }
+
+                            оnPumpStatusChanged = (OnPumpStatusChange)item;
 
                             Pumps.Add(pump.PumpId, new PumpInfo() { Pump = pump.PumpId, Blocked = (оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION), Fuels = new Dictionary<string, FuelInfo>() });
                             foreach (var nozzle in pump.Nozzles)
                             {
-                                if (оnPumpStatusChanged?.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden") ?? false)
+                                if (оnPumpStatusChanged == null || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))
                                     continue;
 
                                 var fuel = Fuels.First(t => t.Value.ID == nozzle.GradeId);
@@ -3532,8 +3533,6 @@ $"Попытка \"{z + 1}\" результат: {result}");
                             return -1;
                         }
 
-                        Driver.FillingOver(TransID, 0, 0);
-
                         XmlPumpClient.PumpGetStatus(Driver.terminal, order.PumpNo, 1);
 
                         object item = null;
@@ -3544,16 +3543,18 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                 MESSAGE_TYPES.OnPumpStatusChange), out item) && item != null)
                                 оnPumpStatusChanged = (OnPumpStatusChange)item;
 
-                        var discount = (order.BasePrice - order.Price) * order.Quantity;
-                        var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
-                        int allowed = 0;
-                        foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
-                        {
-                            allowed += 1 << (pumpFuel.Value.ID - 1);
-                        }
+                        //var discount = (order.BasePrice - order.Price) * order.Quantity;
+                        //var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
+                        //int allowed = 0;
+                        //foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
+                        //{
+                        //    allowed += 1 << (pumpFuel.Value.ID - 1);
+                        //}
                         //TODO Не работает!
                         if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_AUTHORIZED)
                         {
+                            log(
+                                       $"\t\tCancelDoseDelegate:\r\n\t\tPumpStop №{(long)TransID} pmp:{order.PumpNo}\r\n");
                             XmlPumpClient.PumpStop(Driver.terminal, order.PumpNo, 1);
 
                             //Thread.Sleep(1000);
@@ -3583,6 +3584,9 @@ $"Попытка \"{z + 1}\" результат: {result}");
                             //    $"fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n"
                             //    );
                         }
+                        //else
+                        //    Driver.FillingOver(TransID, 0, 0);
+
                         //if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                         //{
                         //    log.Write(
