@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -216,18 +217,21 @@ namespace SPC_Raspberry
         private static int sockPort;
         private static int sockTerminal;
 
+        public static int SendTimeout;
+        public static int WaitAnswerTimeout;
+
         public static Encoding Enc = Encoding.UTF8;
 
         //public static List<object> answers;
-        public static Dictionary<Tuple<int, MESSAGE_TYPES>, object> statuses;
-        public static Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>> fillings;
+        public static Dictionary<Tuple<int, MESSAGE_TYPES>, object> Statuses;
+        public static Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>> Fillings;
 
-        public static void StartClient(string b_hostB2, int i_port)
+        public static void StartClient(string bHostB2, int iPort)
         {
             client = new TcpClient();
             try
             {
-                client.Connect(b_hostB2, i_port); //подключение клиента
+                client.Connect(bHostB2, iPort); //подключение клиента
                 stream = client.GetStream(); // получаем поток
 
                 //string message = "-------";
@@ -251,14 +255,14 @@ namespace SPC_Raspberry
             }
         }
 
-        public static void StartSocket(byte[] b_hostB2, int i_port, int terminal)
+        public static void StartSocket(byte[] bHostB2, int iPort, int terminal)
         {
             if (socket != null)
                 return;
 
             IPHostEntry hostEntry = null;
 
-            IPEndPoint ipe = new IPEndPoint(new IPAddress(b_hostB2), i_port);
+            IPEndPoint ipe = new IPEndPoint(new IPAddress(bHostB2), iPort);
             Socket tempSocket =
                 new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
 
@@ -267,18 +271,19 @@ namespace SPC_Raspberry
             if (tempSocket.Connected)
             {
                 socket = tempSocket;
+                //socket.Blocking = false;
                 //answers = new List<object>();
-                statuses = new Dictionary<Tuple<int, MESSAGE_TYPES>, object>();
-                fillings = new Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>>();
+                Statuses = new Dictionary<Tuple<int, MESSAGE_TYPES>, object>();
+                Fillings = new Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>>();
                 Thread receiveThread = new Thread(new ThreadStart(ReceiveMessageSocket));
-                sockHost = b_hostB2;
-                sockPort = i_port;
+                sockHost = bHostB2;
+                sockPort = iPort;
                 sockTerminal = terminal;
                 receiveThread.Start(); //старт потока
             }
         }
 
-        public static void RestatrSocketIfNotAlive(byte[] b_hostB2, int i_port)
+        public static void RestatrSocketIfNotAlive(byte[] bHostB2, int iPort)
         {
             bool blockingState = socket.Blocking;
             try
@@ -295,9 +300,12 @@ namespace SPC_Raspberry
                 if (!e.NativeErrorCode.Equals(10035))
                 {
                     //MessageBox.Show($"Disconnected: error code {e.NativeErrorCode}!");
+                    //throw new Exception("ERROR Разрыв соединения с попыткой восстановления!");
+                    File.AppendAllText("exchange.log", $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
+
                     IPHostEntry hostEntry = null;
 
-                    IPEndPoint ipe = new IPEndPoint(new IPAddress(b_hostB2), i_port);
+                    IPEndPoint ipe = new IPEndPoint(new IPAddress(bHostB2), iPort);
                     Socket tempSocket =
                         new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
 
@@ -306,6 +314,7 @@ namespace SPC_Raspberry
                     if (tempSocket.Connected)
                     {
                         socket = tempSocket;
+                        //socket.Blocking = false;
                         //lock (answers)
                         //{
                         //    answers.RemoveAll(t =>t is OnDataInit);
@@ -331,8 +340,7 @@ namespace SPC_Raspberry
             //{
             //string message = Console.ReadLine();
             byte[] data = Encoding.ASCII.GetBytes(message);
-            if (stream != null)
-                stream.Write(data, 0, data.Length);
+            stream?.Write(data, 0, data.Length);
             //}
         }
 
@@ -340,16 +348,22 @@ namespace SPC_Raspberry
         {
             byte[] bytesToSent = Enc.GetBytes(message);
 
-            if (socket != null)
-            {
-                // Send request to the server.
-                lock(socket)
-                    socket.Send(bytesToSent, bytesToSent.Length, 0);
-                Thread.Sleep(timeout);
-            }
+            if (socket == null) return;
+
+            lock (socket)
+                RestatrSocketIfNotAlive(sockHost, sockPort);
+
+            // Send request to the server.
+            lock (socket)
+                socket.Send(bytesToSent, bytesToSent.Length, 0);
+
+            File.AppendAllText("exchange.log", $"\r\n********send*********\r\n{message}");
+            //File.AppendAllText("exchange.log", $"\r\n********sendInv*********\r\n{message}");
+
+            Thread.Sleep(timeout);
         }
 
-        public static void SendMessage(string message, int timeout = 2000)
+        public static void SendMessage(string message, int timeout)
         {
             if (!isValidXml(message))
                 throw new XmlException();
@@ -395,7 +409,7 @@ namespace SPC_Raspberry
         public static void ReceiveMessageSocket()
         {
             StringBuilder builder = new StringBuilder();
-            File.Delete("receive.log");
+            File.Delete("exchange.log");
             while (true)
             {
                 try
@@ -420,6 +434,8 @@ namespace SPC_Raspberry
 
                     if (builder.Length != 0)
                     {
+                        var tmp = builder.ToString();
+                        File.AppendAllText("exchange.log", $"\r\n********recv*********\r\n{tmp}");
                         string[] ansverStrings = builder.ToString()
                             .Split(new[] {"<?xml version=\"1.0\"?>"}, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var xml in ansverStrings)
@@ -427,10 +443,11 @@ namespace SPC_Raspberry
                             if (isValidXml(xml))
                             {
                                 builder.Remove(0, xml.Length + 21);
-                                File.AppendAllText("receive.log", "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
+                                //File.AppendAllText("exchange.log", "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
                             }
                             else
                             {
+                                File.AppendAllText("exchange.log", $"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
                                 continue;
                             }
 
@@ -443,9 +460,9 @@ namespace SPC_Raspberry
                                     OnDataInit result = (OnDataInit) serializer.Deserialize(reader);
                                     //lock(answers)
                                     //    answers.Add(result);
-                                    lock (statuses)
+                                    lock (Statuses)
                                     {
-                                        statuses[new Tuple<int, MESSAGE_TYPES>
+                                        Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (-1, MESSAGE_TYPES.OnDataInit)] =  result;
                                     }
                                 }
@@ -460,21 +477,21 @@ namespace SPC_Raspberry
                                     //    answers.Add(result);
                                     //if (result.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                                     //PumpRequestCollect(result.OptId, result.PumpNo);
-                                    lock (statuses)
+                                    lock (Statuses)
                                     {
-                                        statuses[new Tuple<int, MESSAGE_TYPES>
+                                        Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpNo, MESSAGE_TYPES.OnPumpStatusChange)] =  result;
 
 
                                         if (!String.IsNullOrEmpty(result.OrderUID))
                                         {
-                                            if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>
+                                            if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>
                                                 (result.PumpNo, MESSAGE_TYPES.OnPumpStatusChangeFilling), out msgs))
                                             {
                                                 msgs.Add(result);
                                             }
                                             else
-                                                fillings[new Tuple<int, MESSAGE_TYPES>
+                                                Fillings[new Tuple<int, MESSAGE_TYPES>
                                                 (result.PumpNo, MESSAGE_TYPES.OnPumpStatusChangeFilling)] = new List<object>{ result };
                                         }
                                     }
@@ -488,9 +505,9 @@ namespace SPC_Raspberry
                                     OnSetGradePrices result = (OnSetGradePrices) serializer.Deserialize(reader);
                                     //lock (answers)
                                     //    answers.Add(result);
-                                    lock (statuses)
+                                    lock (Statuses)
                                     {
-                                        statuses[new Tuple<int, MESSAGE_TYPES>
+                                        Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (-1, MESSAGE_TYPES.OnSetGradePrices)] =  result ;
                                     }
                                 }
@@ -503,16 +520,16 @@ namespace SPC_Raspberry
                                     PumpResponse result = (PumpResponse) serializer.Deserialize(reader);
                                     //lock (answers)
                                     //    answers.Add(result);
-                                    lock (statuses)
+                                    lock (Statuses)
                                     {
-                                        if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>
+                                        if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpObj.PumpNumber, MESSAGE_TYPES.PumpResponse), out msgs))
                                         {
                                             //msgs.Clear();
                                             msgs.Add(result);
                                         }
                                         else
-                                            fillings[new Tuple<int, MESSAGE_TYPES>
+                                            Fillings[new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpObj.PumpNumber, MESSAGE_TYPES.PumpResponse)] = new List<object>() { result };
                                     }
                                 }
@@ -525,9 +542,9 @@ namespace SPC_Raspberry
                                     OnPumpError result = (OnPumpError)serializer.Deserialize(reader);
                                     //lock (answers)
                                     //    answers.Add(result);
-                                    lock (statuses)
+                                    lock (Statuses)
                                     {
-                                        statuses[new Tuple<int, MESSAGE_TYPES>
+                                        Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpNo, MESSAGE_TYPES.OnPumpError)] = result;
                                     }
                                 }
@@ -548,10 +565,8 @@ namespace SPC_Raspberry
 
         public static void Disconnect()
         {
-            if (stream != null)
-                stream.Close();//отключение потока
-            if (client != null)
-                client.Close();//отключение клиента
+            stream?.Close();//отключение потока
+            client?.Close();//отключение клиента
 
             stream = null;
             client = null;
@@ -571,13 +586,8 @@ $@"
   <Time> {time} </Time>
   <Cashier> {Cashier} </Cashier>
 </InitData>";
-            string initData2 =
-"<?xml version=\"1.0\"?>" +
-$@"
-<InitData>
-  <OptId> {TerminalId} </OptId>
-</InitData>";
-            SendMessage(initData1);
+
+            SendMessage(initData1, SendTimeout);
         }
 
         public static void GetGradePrices(int TerminalId, int PumpId, int Cashier = 1)
@@ -595,14 +605,8 @@ $@"
   <Cashier> {Cashier} </Cashier>
 </GetGradePrices>
 ";
-            string GetGrade2 =
-"<?xml version=\"1.0\"?>" +
-$@"
-<GetGradePrices>
-  <OptId> {TerminalId} </OptId>
-</GetGradePrices>
-";
-            SendMessage(GetGrade1);
+
+            SendMessage(GetGrade1, SendTimeout);
         }
 
         private static void InitPump(int TerminalId, int PumpId, int TerminalBlocked, int Cashier = 1)
@@ -622,31 +626,11 @@ $@"
   </SetOccupied>
   <Cashier> {Cashier} </Cashier>
 </InitPump>";
-            string initPump2 =
-"<?xml version=\"1.0\"?>" +
-$@"
-<InitPump>
-  <OptId> {TerminalId} </OptId>
-  <PumpNo> {PumpId} </PumpNo>
-  <SetOccupied>
-    <OptId> {TerminalBlocked} </OptId>
-  </SetOccupied>
-</InitPump>";
-            var doc = 
-                new XDocument(new XDeclaration("1.0", "UTF-8", null), 
-                    new XElement("InitPump",
-                            new XElement("OptId", TerminalId),
-                            new XElement("PumpNo", PumpId),
-                            new XElement("SetOccupied",
-                                new XElement("OptId", TerminalBlocked)
-                        )));
 
-            var initPump3 = doc.Declaration.ToString() + doc.ToString();
-
-            SendMessage(initPump1, 2000);
+            SendMessage(initPump1, SendTimeout);
         }
 
-        public static bool Init(int TerminalId, int PumpId, int TerminalBlocked, int Cashier = 1, int timeout = 3000)
+        public static bool Init(int TerminalId, int PumpId, int TerminalBlocked, int timeout, int Cashier = 1)
         {
             //answers.RemoveAll(t =>
             //    t is OnPumpStatusChange
@@ -696,17 +680,17 @@ $@"
     <Date>{date}</Date>
     <Time>{time}</Time>
     <AllowedNozzles>{AllowedNozzles}</AllowedNozzles>
-    <PrePaid>{PrePaid}</PrePaid>" +
+    <PrePaid>{PrePaid.ToString("F", CultureInfo.InvariantCulture)}</PrePaid>" +
 //@"    <Notes>
 //      <NotesCount>1</NotesCount>
 //      <NotesID>100</NotesID>
 //    </Notes>" +
 $@"
     <PaymentType>{(int)PaymentType}</PaymentType>
-    <SaleTotal>{PrePaid + Discount}</SaleTotal>
-    <Volume>{Volume}</Volume>
-    <SaleDiscount>{Discount}
-      <Generic>{Discount}</Generic>
+    <SaleTotal>{(PrePaid + Discount).ToString("F", CultureInfo.InvariantCulture)}</SaleTotal>
+    <Volume>{Volume.ToString("F", CultureInfo.InvariantCulture)}</Volume>
+    <SaleDiscount>{Discount.ToString("F", CultureInfo.InvariantCulture)}
+      <Generic>{Discount.ToString("F", CultureInfo.InvariantCulture)}</Generic>
       <Loyalty>0</Loyalty>
       <Rounding>0</Rounding>
     </SaleDiscount>
@@ -724,17 +708,13 @@ $@"
 </SaleData>
 ";
 
-            string saleData2 =
-"<?xml version=\"1.0\"?>" +
-$@"
-";
-            SendMessage(saleData1);
+            SendMessage(saleData1, SendTimeout);
         }
 
         public static bool Presale(int TerminalId, int PumpId, int AllowedNozzles,
             decimal PrePaid, decimal Discount, decimal Volume, PAYMENT_TYPE PaymentType,
             string RNN, int GradeId, string GradeName, int GradePrice,
-            string CardNumber, int Cashier = 1, int timeout = 3000)
+            string CardNumber, int timeout, int Cashier = 1)
         {
             //answers.RemoveAll(t =>
             //    t is OnPumpStatusChange
@@ -744,6 +724,10 @@ $@"
             SaleDataPresale(TerminalId, PumpId, AllowedNozzles, PrePaid, Discount, Volume, 
                 PaymentType, RNN, GradeId, GradeName, GradePrice, CardNumber, Cashier);
 
+            Thread.Sleep(1000);
+
+            var r2 = Statuses;
+            var r3 = Fillings;
             //while (timeout > 0 && !answers.Any(t =>
             //    t is OnPumpStatusChange
             //    && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION
@@ -786,31 +770,31 @@ $@"
     <Date>{date}</Date>
     <Time>{time}</Time>
     <AllowedNozzles>{AllowedNozzles}</AllowedNozzles>
-    <PrePaid>{PrePaid}</PrePaid>" +
+    <PrePaid>{PrePaid.ToString("F", CultureInfo.InvariantCulture)}</PrePaid>" +
 //@"    <Notes>
 //      <NotesCount>1</NotesCount>
 //      <NotesID>100</NotesID>
 //    </Notes>" +
 $@"
-    <Sold>{Sold}</Sold>
+    <Sold>{Sold.ToString("F", CultureInfo.InvariantCulture)}</Sold>
     <PaymentType>{(int)PaymentType}</PaymentType>
-    <SaleTotal>{PrePaid + Discount}</SaleTotal>
-    <Volume>{Volume}</Volume>
-    <SaleDiscount>{Discount}
-      <Generic>{Discount}</Generic>
+    <SaleTotal>{(PrePaid + Discount).ToString("F", CultureInfo.InvariantCulture)}</SaleTotal>
+    <Volume>{Volume.ToString("F", CultureInfo.InvariantCulture)}</Volume>
+    <SaleDiscount>{Discount.ToString("F", CultureInfo.InvariantCulture)}
+      <Generic>{Discount.ToString("F", CultureInfo.InvariantCulture)}</Generic>
       <Loyalty>0</Loyalty>
       <Rounding>0</Rounding>
     </SaleDiscount>
     <CardNumber>{CardNumber}</CardNumber>
     <PreSale>0</PreSale>
     <Sale>1</Sale>
-    <SaleLiters>{SaleLiters}</SaleLiters>
+    <SaleLiters>{SaleLiters.ToString("F", CultureInfo.InvariantCulture)}</SaleLiters>
     <GradeId>{GradeId}</GradeId>
     <GradeName>{GradeName}</GradeName>
     <GradePrice>{GradePrice}</GradePrice>
     <OrderUid>{RNN}</OrderUid>
-    <PostSaleDiscount>{Discount}
-      <Generic>{Discount}</Generic>
+    <PostSaleDiscount>{Discount.ToString("F", CultureInfo.InvariantCulture)}
+      <Generic>{Discount.ToString("F", CultureInfo.InvariantCulture)}</Generic>
       <Loyalty>0</Loyalty>
       <Rounding>0</Rounding>
     </PostSaleDiscount>
@@ -831,7 +815,7 @@ $@"
 "<?xml version=\"1.0\"?>" +
 $@"
 ";
-            SendMessage(saleData1);
+            SendMessage(saleData1, SendTimeout);
         }
 
         private static void PumpRequestAuthorize(int TerminalId, int PumpId, long RequestID, int NozzleAllowed, int NozzleNumber, string RNN, int DeliveryLimit, DELIVERY_UNIT DeliveryUnit)
@@ -853,42 +837,30 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
 "     </DeliveryData>\r\n" +
 "</PumpRequest>\r\n";
 
-
-            string pumpRequest2 =
-"<?xml version=\"1.0\"?>\r\n" +
-$"<PumpRequest RequestType=\"Authorize\" OptId=\"{TerminalId}\">\r\n" +
-$"    <Pump PumpNumber=\"{PumpId}\">\r\n" +
-"       <Nozzle IsNozzleAllowed=\"15\" NozzleNumber=\"1\" />\r\n" +
-"     </Pump>\r\n" +
-"     <DeliveryData >\r\n" +
-"       <AuthorizationData DeliveryLimit=\"10000\" DeliveryUnit=\"1\"/>\r\n" +
-"       <OptTransactionInfo OrderUid=\"c6d4e4d0-a048-416d-a998-eb69c7587a44\"/>\r\n" +
-"     </DeliveryData>\r\n" +
-"</PumpRequest>\r\n";
-            SendMessage(pumpRequest1);
+            SendMessage(pumpRequest1, SendTimeout);
         }
 
-        public static bool Authorize(int TerminalId, int PumpId, long RequestID, int NozzleAllowed, int NozzleNumber, string RNN, int DeliveryLimit, DELIVERY_UNIT DeliveryUnit, int timeout = 3000)
+        public static bool Authorize(int TerminalId, int PumpId, long RequestID, int NozzleAllowed, int NozzleNumber, string RNN, int DeliveryLimit, DELIVERY_UNIT DeliveryUnit, int timeout)
         {
             bool next = false;
             List<object> item  = null;
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+            lock (Statuses)
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     item?.RemoveAll(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
 
             PumpRequestAuthorize(TerminalId, PumpId, RequestID, NozzleAllowed, NozzleNumber, RNN, DeliveryLimit, DeliveryUnit);
 
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+            lock (Statuses)
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     next = !item.Any(t => 
                     string.Compare(((PumpResponse) t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
             while (timeout > 0 && next)
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (statuses)
-                    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                lock (Statuses)
+                    if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                         next = !item.Any(t =>
                         string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
             }
@@ -897,78 +869,104 @@ $"    <Pump PumpNumber=\"{PumpId}\">\r\n" +
                 return false;
 
             PumpResponse authorizeResponse = null;
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+            lock (Statuses)
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     authorizeResponse = (PumpResponse)item.Last(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
 
             return authorizeResponse?.PumpObj.PumpStatus.Error == null;
         }
 
-        public static OnPumpStatusChange EndFilling(int PumpId, string rnn, int timeout = 60000)
+        public static OnPumpStatusChange EndFillingEventWait(int PumpId, string rnn)
         {
             bool next = false;
-            List<object> item = null;
+            List<object> item2 = null;
+            object item1 = null;
             //lock (statuses)
             //    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange), out item))
             //        item.RemoveAll(t =>t is OnPumpStatusChange);
 
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
-                    next = !item.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
-                    && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
+            OnPumpStatusChange оnPumpStatusChanged = null;
 
-            while (timeout > 0 && next)
+            //lock (Statuses)
+            //{
+            //    if (Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange), out item1) && item1 != null)
+            //        оnPumpStatusChanged = (OnPumpStatusChange)item1;
+
+            //    if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) && item2 != null)
+            //    next = !item2.Any(t => string.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
+            //                        && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
+            //    && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE
+            //    && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION;
+            //}
+
+            do
             {
                 Thread.Sleep(250);
-                timeout -= 250;
-                lock (statuses)
-                    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
-                        next = !item.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
-                        && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
-            }
-            if (timeout <= 0)
-                return null;
+                //timeout -= 250;
+                lock (Statuses)
+                {
+                    if (
+                        Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange),
+                            out item1) && item1 != null)
+                        оnPumpStatusChanged = (OnPumpStatusChange) item1;
 
+                    if (
+                        Fillings.TryGetValue(
+                            new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) &&
+                        item2 != null)
+                        next = !item2.Any(t => String.CompareOrdinal(((OnPumpStatusChange) t).OrderUID, rnn) == 0
+                                               &&
+                                               ((OnPumpStatusChange) t).StatusObj ==
+                                               PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
+                               && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE
+                               && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION;
+                }
+            } while (next);
+            //if (timeout <= 0)
+            //    return null;
+            Form1.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
             OnPumpStatusChange result = null;
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
-                    result = (OnPumpStatusChange)item.Last(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
+            lock (Statuses)
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) && item2 != null)
+                    result = (OnPumpStatusChange)item2.LastOrDefault(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
                         && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
+            Form1.Driver.log.Write($"\t EndFillingEventWait: result: {result}");
             return result;
         }
 
-        public static bool Collect(int TerminalId, int PumpId, long RequestID, string RNN, int timeout = 3000)
+        public static bool Collect(int TerminalId, int PumpId, long RequestID, string RNN, int timeout)
         {
             bool next = false;
             List<object> item = null;
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+            lock (Statuses)
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     item?.RemoveAll(t => 
                     string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
 
             PumpRequestCollect(TerminalId, PumpId, RequestID, RNN);
 
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
-                    next = !item.Any(t =>
-                    string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
-            while (timeout > 0 && next)
+            //lock (Statuses)
+            //    if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+            //        next = !item.Any(t =>
+            //        string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
+            do
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (statuses)
-                    if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                lock (Statuses)
+                    if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                         next = !item.Any(t =>
-                        string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
+                                string.Compare(((PumpResponse) t).RequestType, "Collect", StringComparison.Ordinal) == 0);
             }
+            while (timeout > 0 && next);
 
             if (timeout <= 0)
                 return false;
 
             PumpResponse collectResponse = null;
-            lock (statuses)
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+            lock (Statuses)
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     collectResponse = (PumpResponse)item.Last(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
 
@@ -978,12 +976,12 @@ $"    <Pump PumpNumber=\"{PumpId}\">\r\n" +
         public static void ClearAllTransactionAnswers(int PumpId, string RNN)
         {
             List<object> item = null;
-            lock (statuses)
+            lock (Statuses)
             {
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     item.Clear();
 
-                if (fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
+                if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item))
                     item.RemoveAll(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, RNN) == 0);
             }
     }
@@ -1004,19 +1002,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
 "     </DeliveryData>\r\n" +
 "</PumpRequest>\r\n";
 
-
-            string pumpRequest2 =
-"<?xml version=\"1.0\"?>\r\n" +
-$"<PumpRequest RequestType=\"Collect\" OptId=\"{TerminalId}\">\r\n" +
-"     <MessageHeader RequestID=\"113683\">\r\n" +
-$"       <Timestamp Date=\"{date}\" Time=\"{time}\"/>\r\n" +
-"     </MessageHeader>\r\n" +
-$"    <Pump PumpNumber=\"{PumpId}\"/>\r\n" +
-"     <DeliveryData >\r\n" +
-"       <OptTransactionInfo OrderUid=\"c6d4e4d0-a048-416d-a998-eb69c7587a44\"/>\r\n" +
-"     </DeliveryData>\r\n" +
-"</PumpRequest>\r\n";
-            SendMessage(pumpRequest1);
+            SendMessage(pumpRequest1, SendTimeout);
         }
 
         public static void FiscalEventReceipt(int TerminalId, int PumpId, int DocNumberInShift, int DocNumber, int ShiftNumber, decimal SaleTotal, decimal RefundAmount, PAYMENT_TYPE PaymentType, string RNN, int Cashier = 1)
@@ -1043,23 +1029,8 @@ $@"
 $@"  <RefundAmount>{RefundAmount}</RefundAmount>
 </FiscalEventReceipt>
 ";
-            string FiscalEventReceipt2 =
-"<?xml version=\"1.0\"?>" +
-$@"
-<FiscalEventReceipt>
-  <OptId> {TerminalId} </OptId>
-  <PumpNo> {PumpId} </PumpNo>
-  <Date> {date} </Date>
-  <Time> {time} </Time>
-  <DocNumberInShift>3</DocNumberInShift>
-  <DocNumber>3</DocNumber>
-  <ShiftNumber>1</ShiftNumber>
-  <SaleTotal>100</SaleTotal>
-  <PaymentType>0</PaymentType>
-  <OrderUid>c6d4e4d0-a048-416d-a998-eb69c7587a44</OrderUid>
-</FiscalEventReceipt>
-";
-            SendMessage(FiscalEventReceipt1);
+
+            SendMessage(FiscalEventReceipt1, SendTimeout);
         }
 
         public static void PumpGetStatus(int TerminalId, int PumpId, int Cashier = 1)
@@ -1077,7 +1048,25 @@ $@"
   <Cashier> {Cashier} </Cashier>
 </PumpGetStatus>";
 
-            SendMessage(initData1);
+            SendMessage(initData1, SendTimeout);
+        }
+
+        public static void PumpStop(int TerminalId, int PumpId, int Cashier = 1)
+        {
+            var date = DateTime.Now.ToString("yyyy.MM.dd");
+            var time = DateTime.Now.ToString("hh:mm:ss");
+            string initData1 =
+"<?xml version=\"1.0\"?>" +
+$@"
+<PumpStop>
+  <OptId> {TerminalId} </OptId>
+  <PumpNo> {PumpId} </PumpNo>
+  <Date> {date} </Date>
+  <Time> {time} </Time>
+  <Cashier> {Cashier} </Cashier>
+</PumpStop>";
+
+            SendMessage(initData1, SendTimeout);
         }
 
         private static bool isValidXml(string candidate)
