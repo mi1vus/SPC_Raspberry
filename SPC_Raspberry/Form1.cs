@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -1831,6 +1832,33 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 public Dictionary<string, FuelInfo> Fuels;
             }
 
+            public static void CollectOldOrderThread(object Pump)
+            {
+                object item = null;
+                var pumpId = (int) Pump;
+                log.Write($"\tCollectOldOrderThread Pump:{Pump}\r\n");
+                Thread.Sleep(XmlPumpClient.WaitAnswerTimeout);
+
+                bool res;
+
+                lock (XmlPumpClient.Statuses)
+                    res = XmlPumpClient.Statuses.TryGetValue(
+                              new Tuple<int, MESSAGE_TYPES>(pumpId, MESSAGE_TYPES.OnPumpStatusChange), out item)
+                          && item != null &&
+                          ((OnPumpStatusChange) item)?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING;
+
+                if (res)
+                {
+                    log.Write(XmlPumpClient.Collect(terminal, pumpId, 0, "", XmlPumpClient.WaitAnswerTimeout)
+                        ? $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Sucess\r\n"
+                        : $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Fail\r\n");
+                    //Thread.Sleep(500);
+                    //XmlPumpClient.PumpGetStatus(terminal, pumpId, 1);
+                    //XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pumpId,
+                    //    MESSAGE_TYPES.OnPumpStatusChange), out item);
+                }
+            }
+
             public static void WaitCollectThread(object TransCounter)
             {
                 OrderInfo order = new OrderInfo();
@@ -1877,7 +1905,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                 FillingOver((long) TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
 
-                var discount = (order.BasePrice - order.Price) * order.Quantity;
+                var discount = 100; //(order.BasePrice - order.Price) * order.Quantity;
                 var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
                 int allowed = 0;
                 foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
@@ -1901,7 +1929,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
                     order.Amount, order.OverAmount, discount,
                     order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
-                    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
+                    order.OrderRRN, order.ProductCode, fuel.Key, (int)(order.Price/*fuel.Value.Price*/ * 100), "", 1);
                 log.Write(
                     "WaitCollectThread:SaleDataSale:\r\n" +
                     $"terminal: {Driver.terminal}\r\n" +
@@ -1916,13 +1944,21 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     $"OrderRRN: {order.OrderRRN}\r\n" +
                     $"ProductCode: {order.ProductCode}\r\n" +
                     $"Key: {fuel.Key}\r\n" +
-                    $"fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n"
+                    $"fuelPrice: {(int)(order.Price/*fuel.Value.Price*/ * 100)}\r\n"
                     );
-                //XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo, 1, 1, 1,
-                //    order.OverAmount, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
-                log.Write( "чек\r\n");
+
+                //XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
+                //    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
+                //    (endMessage?.Money ?? 0) / 100m, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
+                //log.Write($"чек:\r\n" +
+                //    $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
+                //    $"GetDocNum: {GetDocNum()}\r\n" +
+                //    $"GetShiftNum: {GetShiftNum()}\r\n" +
+                //    $"OverAmount: {(endMessage?.Money ?? 0)/100.0}\r\n" +
+                //    $"OrderRRN: {order.OrderRRN}\r\n");
+
                 XmlPumpClient.Init(Driver.terminal, order.PumpNo, -order.PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
-                log.Write( "изм. статуса\r\n");
+                log.Write("изм. статуса\r\n");
 
                 //var res = XmlPumpClient.answers;
                 var res2 = XmlPumpClient.Statuses;
@@ -2421,7 +2457,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                     && item != null && ((OnPumpStatusChange)item)?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                             {
                                 log.Write("\tстатус WAITING_COLLECTING\r\n");
-                                XmlPumpClient.Collect(terminal, pump.PumpId, Driver.TransCounter, "", XmlPumpClient.WaitAnswerTimeout);
+                                XmlPumpClient.Collect(terminal, pump.PumpId, 0, "", XmlPumpClient.WaitAnswerTimeout);
                                 //Thread.Sleep(500);
                                 XmlPumpClient.PumpGetStatus(Driver.terminal, pump.PumpId, 1);
                                 XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pump.PumpId,
@@ -3147,30 +3183,30 @@ $"Попытка \"{z + 1}\" результат: {result}");
         public delegate void InvokeEndFillingDelegate(double amount);
         public delegate void InvokeLogDelegate(string text);
 
-        private void button1_Click(object sender, EventArgs e)
-        {
-            OpenDriver();
-        }
+        //private void button1_Click(object sender, EventArgs e)
+        //{
+        //    OpenDriver();
+        //}
 
-        private void button2_Click(object sender, EventArgs e)
-        {
-            Logger.Text = string.Empty;
-        }   
+        //private void button2_Click(object sender, EventArgs e)
+        //{
+        //    Logger.Text = string.Empty;
+        //}   
 
-        private void button3_Click(object sender, EventArgs e)
-        {
-            double amount;
-            if (!double.TryParse(label3.Text, out amount))
-            {
-                double.TryParse(label2.Text, out amount);
-            }
+        //private void button3_Click(object sender, EventArgs e)
+        //{
+        //    double amount;
+        //    if (!double.TryParse(label3.Text, out amount))
+        //    {
+        //        double.TryParse(label2.Text, out amount);
+        //    }
 
-            Driver.FillingOver(Driver.TransCounter, (int)(Quantity*1000), (int)(amount * 100));
-            log("\r\nНалив успешно завершен!" +
-                $"\r\nколво {(int)(Quantity * 1000)} объем {(int)(amount * 100)}");
-            Price = 0;
-            EndFillingDisabled();
-        }
+        //    Driver.FillingOver(Driver.TransCounter, (int)(Quantity*1000), (int)(amount * 100));
+        //    log("\r\nНалив успешно завершен!" +
+        //        $"\r\nколво {(int)(Quantity * 1000)} объем {(int)(amount * 100)}");
+        //    Price = 0;
+        //    EndFillingDisabled();
+        //}
 
         private void button4_Click(object sender, EventArgs e)
         {
@@ -3197,11 +3233,18 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 return;
             log("освобождение колонки\r\n");
             XmlPumpClient.SaleDataSale(terminal, pump, 15, price, (endMessage == null ? 0 : (decimal)endMessage.Money) / 100, 0, vol, (endMessage == null ? 0 : (decimal)endMessage.Liters) / 100, PAYMENT_TYPE.Cash, "qwertyuiop", 1, "АИ-92", 2000, "1234567890123456", 1);
+            Thread.Sleep(3000);
             log("фактические данные заправки\r\n");
-            //XmlPumpClient.FiscalEventReceipt(terminal, pump, 1,1,1, price, 0,PAYMENT_TYPE.Cash, "qwertyuiop", 1);
-            //log("чек\r\n");
-            //XmlPumpClient.Init(terminal, pump, -pump, XmlPumpClient.WaitAnswerTimeout, 1);
-            //log("изм. статуса\r\n");
+            XmlPumpClient.FiscalEventReceipt(Driver.terminal, pump,
+                95, 58, 5,//GetShiftDocNum(), GetDocNum(), GetShiftNum(),
+                price, 0, PAYMENT_TYPE.Cash, "qwertyuiop", 1);
+            log($"чек:\r\n" +
+                $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
+                $"GetDocNum: {GetDocNum()}\r\n" +
+                $"GetShiftNum: {GetShiftNum()}\r\n" +
+                $"OverAmount: {price}\r\n");
+            XmlPumpClient.Init(terminal, pump, -pump, XmlPumpClient.WaitAnswerTimeout, 1);
+            log("изм. статуса\r\n");
 
             var res2 = XmlPumpClient.Statuses;
             var res3 = XmlPumpClient.Fillings;
@@ -3210,32 +3253,32 @@ $"Попытка \"{z + 1}\" результат: {result}");
             log("\r\n");
         }
 
-        private void button5_Click(object sender, EventArgs e)
-        {
-            double amount;
-            double amountSrc;
-            if (double.TryParse(label3.Text, out amount) && double.TryParse(label2.Text, out amountSrc))
-            {
-                amount += 0.1;
-                if (amount > amountSrc)
-                    amount = amountSrc;
+        //private void button5_Click(object sender, EventArgs e)
+        //{
+        //    double amount;
+        //    double amountSrc;
+        //    if (double.TryParse(label3.Text, out amount) && double.TryParse(label2.Text, out amountSrc))
+        //    {
+        //        amount += 0.1;
+        //        if (amount > amountSrc)
+        //            amount = amountSrc;
 
-                label3.Text = amount.ToString("F3");
-            }
-        }
+        //        label3.Text = amount.ToString("F3");
+        //    }
+        //}
 
-        private void button6_Click(object sender, EventArgs e)
-        {
-            double amount;
-            if (double.TryParse(label3.Text, out amount))
-            {
-                amount -= 0.1;
-                if (amount < 0)
-                    amount = 0;
+        //private void button6_Click(object sender, EventArgs e)
+        //{
+        //    double amount;
+        //    if (double.TryParse(label3.Text, out amount))
+        //    {
+        //        amount -= 0.1;
+        //        if (amount < 0)
+        //            amount = 0;
 
-                label3.Text = amount.ToString("F3");
-            }
-        }
+        //        label3.Text = amount.ToString("F3");
+        //    }
+        //}
 
         public void EndFillingEnabled(double amount)
         {
@@ -3331,11 +3374,10 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     {
                         ++Driver.TransCounter;
                         log("Установка дозы на ТРК: " + Order.PumpNo + " , сгенерирован TransID: " +
-                            Driver.TransCounter +
-                            "\r\n");
+                            Driver.TransCounter + "\r\n");
 
                         //var prePaid = Order.Price*Order.Quantity;
-                        var discount = 0;//(Order.BasePrice - Order.Price)*Order.Quantity;
+                        var discount = 0;//100;//(Order.BasePrice - Order.Price)*Order.Quantity;
                         var fuel = Driver.Fuels.First(t => t.Value.ID == Order.ProductCode);
                         int allowed = 0;
                         foreach (var pumpFuel in Driver.Pumps[Order.PumpNo].Fuels)
@@ -3366,18 +3408,19 @@ $"Попытка \"{z + 1}\" результат: {result}");
                             $"рнн:{Order.OrderRRN}\r\n" +
                             $"продукт код:{Order.ProductCode}\r\n" +
                             $"продукт{fuel.Key}\r\n" +
-                            $"продукт цена коп:{(int)(fuel.Value.Price * 100)}\r\n");
+                            $"продукт цена коп:{(int)(Order.Price/*fuel.Value.Price*/ * 100)}\r\n");
 
                         if (!XmlPumpClient.Presale(Driver.terminal, Order.PumpNo, allowed, Order.Amount,
                             discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode),
-                            Order.OrderRRN, Order.ProductCode, fuel.Key, (int) (fuel.Value.Price*100), "", XmlPumpClient.WaitAnswerTimeout, 1))
+                            Order.OrderRRN, Order.ProductCode, fuel.Key, 
+                            (int) (Order.Price/*fuel.Value.Price*/ * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
                         {
                             log("SetDoseCallback:Presale: нет о твета на Presale\r\n");
                             return -1;
                         }
 
                         if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
-                            allowed, Order.ProductCode, Order.OrderRRN, (int) (Order.Amount*100), DELIVERY_UNIT.Money,
+                            allowed, Order.ProductCode, Order.OrderRRN, (int)(Order.Quantity * 100), DELIVERY_UNIT.Volume,/*(int) (Order.Amount*100), DELIVERY_UNIT.Money,*/
                             XmlPumpClient.WaitAnswerTimeout))
                         {
                             log("SetDoseCallback:Authorize: нет ответа на Authorize\r\n");
@@ -3434,15 +3477,19 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                 MESSAGE_TYPES.OnPumpStatusChange), out item) && item != null)
                                 оnPumpStatusChanged = (OnPumpStatusChange)item;
 
-                        //if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
-                        //{
+                        if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
+                        {
+                            Thread myThread2 = new Thread(Driver.CollectOldOrderThread);
+                            myThread2.Start((int)Pump); // запускаем поток
+
+                            
                         //    log("\tGetPumpState статус WAITING_COLLECTING\r\n");
                         //    XmlPumpClient.Collect(Driver.terminal, (int)Pump, Driver.TransCounter, "", XmlPumpClient.WaitAnswerTimeout);
                         //    //Thread.Sleep(500);
                         //    XmlPumpClient.PumpGetStatus(Driver.terminal, (int)Pump, 1);
                         //    оnPumpStatusChanged = (OnPumpStatusChange)XmlPumpClient.Statuses[new Tuple<int, MESSAGE_TYPES>
                         //                ((int)Pump, MESSAGE_TYPES.OnPumpStatusChange)];
-                        //}
+                        }
 
                         var pmp = Driver.Pumps[(int)Pump];
                         pmp.DispStatus =
@@ -3666,6 +3713,20 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         + "Новая скидка: " + (float)DiscountMoney / 100 + "\r\n"
                         + "\r\n");
 
+                        //++Driver.TransCounter;
+
+                        //XmlPumpClient.FiscalEventReceipt(Driver.terminal, 1/*order.PumpNo*/,
+                        //    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
+                        //    (decimal)Amount / 100m/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, "123123123123" /*order.OrderRRN*/, 1);
+                        //log($"чек:\r\n" +
+                        //    $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
+                        //    $"GetDocNum: {GetDocNum()}\r\n" +
+                        //    $"GetShiftNum: {GetShiftNum()}\r\n" +
+                        //    $"OverAmount: {(decimal)Amount / 100m}\r\n" +
+                        //    $"OrderRRN: {123123123123/*order.OrderRRN*/}\r\n");
+
+                        //DebithThread.SetTransID(Driver.TransCounter);
+
                         //var order = Driver.TransMemory[Trans_ID];
                         //var discount = (order.BasePrice - order.Price) * order.Quantity;
                         //var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
@@ -3744,6 +3805,21 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         + "\r\n" + RecieptText
                         + "\r\n------------------------------------------------------"
                         + "\r\n");
+
+                        ++Driver.TransCounter;
+
+                        XmlPumpClient.FiscalEventReceipt(Driver.terminal, 1/*order.PumpNo*/,
+                            GetShiftDocNum(), GetDocNum(), GetShiftNum(),
+                            (decimal)Amount / 100m/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, "123123123123" /*order.OrderRRN*/, 1);
+                        log($"чек:\r\n" +
+                            $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
+                            $"GetDocNum: {GetDocNum()}\r\n" +
+                            $"GetShiftNum: {GetShiftNum()}\r\n" +
+                            $"OverAmount: {(decimal)Amount / 100m}\r\n" +
+                            $"OrderRRN: {123123123123/*order.OrderRRN*/}\r\n");
+
+                        DebithThread.SetTransID(Driver.TransCounter);
+
                         return 1;
                     },
                     "Sample Control", IntPtr.Zero/*ctxSrc*/) != 1
@@ -3781,6 +3857,21 @@ $"Попытка \"{z + 1}\" результат: {result}");
             {
                 log($"Ошибка инициализации библиотеки {Driver.Description()}:{ex}\r\n");
             }
+        }
+
+        public static int GetShiftNum()
+        {
+            return 5;
+            var date = DateTime.Now;
+            return date.Month*10000 + date.Day*1000 + date.Hour*100 + date.Minute;
+        }
+        public static int GetShiftDocNum()
+        {
+            return (int)Driver.TransCounter;
+        }
+        public static int GetDocNum()
+        {
+            return GetShiftNum()*100 + (int)Driver.TransCounter;
         }
     }
 }

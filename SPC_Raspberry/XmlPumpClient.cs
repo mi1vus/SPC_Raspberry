@@ -408,7 +408,8 @@ namespace SPC_Raspberry
         public static void ReceiveMessageSocket()
         {
             StringBuilder builder = new StringBuilder();
-            File.Delete("exchange2.log");
+            File.WriteAllText("exchange2.log", string.Empty);
+            //File.Delete("exchange2.log");
             while (true)
             {
                 try
@@ -679,17 +680,17 @@ $@"
     <Date>{date}</Date>
     <Time>{time}</Time>
     <AllowedNozzles>{AllowedNozzles}</AllowedNozzles>
-    <PrePaid>{PrePaid.ToString("F", CultureInfo.InvariantCulture)}</PrePaid>" +
+    <PrePaid>{DecimalToRoundF2String(PrePaid)}</PrePaid>" +
 //@"    <Notes>
 //      <NotesCount>1</NotesCount>
 //      <NotesID>100</NotesID>
 //    </Notes>" +
 $@"
     <PaymentType>{(int)PaymentType}</PaymentType>
-    <SaleTotal>{(PrePaid + Discount).ToString("F", CultureInfo.InvariantCulture)}</SaleTotal>
-    <Volume>{Volume.ToString("F", CultureInfo.InvariantCulture)}</Volume>
-    <SaleDiscount>{Discount.ToString("F", CultureInfo.InvariantCulture)}
-      <Generic>{Discount.ToString("F", CultureInfo.InvariantCulture)}</Generic>
+    <SaleTotal>{DecimalToRoundF2String(PrePaid + Discount)}</SaleTotal>
+    <Volume>{DecimalToRoundF2String(Volume)}</Volume>
+    <SaleDiscount>{DecimalToRoundF2String(Discount)}
+      <Generic>{DecimalToRoundF2String(Discount)}</Generic>
       <Loyalty>0</Loyalty>
       <Rounding>0</Rounding>
     </SaleDiscount>
@@ -769,31 +770,31 @@ $@"
     <Date>{date}</Date>
     <Time>{time}</Time>
     <AllowedNozzles>{AllowedNozzles}</AllowedNozzles>
-    <PrePaid>{PrePaid.ToString("F", CultureInfo.InvariantCulture)}</PrePaid>" +
+    <PrePaid>{DecimalToRoundF2String(PrePaid)}</PrePaid>" +
 //@"    <Notes>
 //      <NotesCount>1</NotesCount>
 //      <NotesID>100</NotesID>
 //    </Notes>" +
 $@"
-    <Sold>{Sold.ToString("F", CultureInfo.InvariantCulture)}</Sold>
+    <Sold>{DecimalToRoundF2String(Sold)}</Sold>
     <PaymentType>{(int)PaymentType}</PaymentType>
-    <SaleTotal>{(PrePaid + Discount).ToString("F", CultureInfo.InvariantCulture)}</SaleTotal>
-    <Volume>{Volume.ToString("F", CultureInfo.InvariantCulture)}</Volume>
-    <SaleDiscount>{Discount.ToString("F", CultureInfo.InvariantCulture)}
-      <Generic>{Discount.ToString("F", CultureInfo.InvariantCulture)}</Generic>
+    <SaleTotal>{DecimalToRoundF2String(PrePaid + Discount)}</SaleTotal>
+    <Volume>{DecimalToRoundF2String(Volume)}</Volume>
+    <SaleDiscount>{DecimalToRoundF2String(Discount)}
+      <Generic>{DecimalToRoundF2String(Discount)}</Generic>
       <Loyalty>0</Loyalty>
       <Rounding>0</Rounding>
     </SaleDiscount>
     <CardNumber>{CardNumber}</CardNumber>
     <PreSale>0</PreSale>
     <Sale>1</Sale>
-    <SaleLiters>{SaleLiters.ToString("F", CultureInfo.InvariantCulture)}</SaleLiters>
+    <SaleLiters>{DecimalToRoundF2String(SaleLiters)}</SaleLiters>
     <GradeId>{GradeId}</GradeId>
     <GradeName>{GradeName}</GradeName>
     <GradePrice>{GradePrice}</GradePrice>
     <OrderUid>{RNN}</OrderUid>
-    <PostSaleDiscount>{Discount.ToString("F", CultureInfo.InvariantCulture)}
-      <Generic>{Discount.ToString("F", CultureInfo.InvariantCulture)}</Generic>
+    <PostSaleDiscount>{DecimalToRoundF2String(Discount)}
+      <Generic>{DecimalToRoundF2String(Discount)}</Generic>
       <Loyalty>0</Loyalty>
       <Rounding>0</Rounding>
     </PostSaleDiscount>
@@ -810,10 +811,6 @@ $@"
 </SaleData>
 ";
 
-            string saleData2 =
-"<?xml version=\"1.0\"?>" +
-$@"
-";
             SendMessage(saleData1, SendTimeout);
         }
 
@@ -924,7 +921,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             } while (next);
             //if (timeout <= 0)
             //    return null;
-            Form1.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
+            Form1.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2?.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
             OnPumpStatusChange result = null;
             lock (Statuses)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) && item2 != null)
@@ -1020,8 +1017,8 @@ $@"
   <DocNumber>{DocNumber}</DocNumber>
   <ShiftNumber>{ShiftNumber}</ShiftNumber>
   <Cashier>{Cashier}</Cashier>
-  <SaleTotal>{SaleTotal}</SaleTotal>
-  <PaymentType>{PaymentType}</PaymentType>
+  <SaleTotal>{DecimalToRoundF2String(SaleTotal)}</SaleTotal>
+  <PaymentType>{(int)PaymentType}</PaymentType>
   <OrderUid>{RNN}</OrderUid>
 " +
 //"  <RefundBarCode BarCodeType=\"CODE128\">2804524148019514262803</RefundBarCode>\r\n"+
@@ -1081,6 +1078,11 @@ $@"
         public static PAYMENT_TYPE PaymentCodeToType(int code)
         {
             return code/10 == 1 ? PAYMENT_TYPE.Cash : code/10 == 2 ? PAYMENT_TYPE.FuelCard : PAYMENT_TYPE.Card;
+        }
+
+        public static string DecimalToRoundF2String(decimal value)
+        {
+            return Math.Round(value, 2, MidpointRounding.ToEven).ToString("F2", CultureInfo.InvariantCulture);
         }
     }
 }
