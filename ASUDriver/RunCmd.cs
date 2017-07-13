@@ -33,7 +33,7 @@ namespace SmartPumpControlRemote
                         {
                             if (c.State == state_enum.Wait || c.State == state_enum.Error)
                             {
-                                var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(Shell.IP, Form1.Driver.ServiceOperationTimeout);
+                                var proxy = RemoteService.IRemoteServiceClient.CreateRemoteService(Shell.IP, ASUDriver.Driver.ServiceOperationTimeout);
                               
                                 c.State = state_enum.Run;
                                 updateInfo();

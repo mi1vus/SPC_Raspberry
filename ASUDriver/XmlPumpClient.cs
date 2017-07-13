@@ -11,7 +11,7 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
 
-namespace SPC_Raspberry
+namespace ASUDriver
 {
     public class TransactionInfo
     {
@@ -921,13 +921,13 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             } while (next);
             //if (timeout <= 0)
             //    return null;
-            Form1.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2?.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
+            ASUDriver.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2?.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
             OnPumpStatusChange result = null;
             lock (Statuses)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) && item2 != null)
                     result = (OnPumpStatusChange)item2.LastOrDefault(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
                         && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
-            Form1.Driver.log.Write($"\t EndFillingEventWait: result: {result}");
+            ASUDriver.Driver.log.Write($"\t EndFillingEventWait: result: {result}");
             return result;
         }
 

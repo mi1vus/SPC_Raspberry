@@ -2,7 +2,7 @@
 
 namespace SPC_Raspberry
 {
-    class DebithThread
+    public class DebithThread
     {
         public static long TransID;
         public delegate bool CallbackType(long TransactID);

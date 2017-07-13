@@ -7,6 +7,7 @@ using System.ServiceModel.Channels;
 using System.IdentityModel.Selectors;
 using System.IdentityModel.Tokens;
 using System.Windows.Forms;
+using ASUDriver;
 using ProjectSummer.Repository;
 using SPC_Raspberry;
 
@@ -89,7 +90,7 @@ namespace RemotePump_Driver
                         int card_t = -2;
                         if (long.TryParse(Order.PumpRRN, out tid) && int.TryParse(Order.DiscontCardType, out card_t)
                             && Order.DiscontCardNO != null && Order.DiscontCardNO != "")
-                            Form1.Driver.InsertCardInfo(DateTime.Now, Order.DiscontCardNO, card_t, tid);
+                            Driver.InsertCardInfo(DateTime.Now, Order.DiscontCardNO, card_t, tid);
                     }
                     catch { }
                 }
@@ -178,7 +179,7 @@ namespace RemotePump_Driver
 
            // bool result = false;
 #warning Дописать обработку блокировки ТРК
-            if (Form1.Driver.HoldPump(PumpNo))//main.callback_HoldPump(PumpNo, out result))
+            if (Driver.HoldPump(PumpNo))//main.callback_HoldPump(PumpNo, out result))
             {
                 
                 //try
@@ -308,7 +309,7 @@ namespace RemotePump_Driver
                             if (BP_BillTypeText == "Аванс")
                                 BP_Product = 0;
 
-                            if (Form1.Driver.SaveReciept(text, BP_DateTime, TID, BP_SerialNum, BP_BillNumber, 0, BP_Sum, (BP_Product == 0), BP_BillTypeText, BP_BillType, BP_PayKind, BP_Product: BP_Product))
+                            if (Driver.SaveReciept(text, BP_DateTime, TID, BP_SerialNum, BP_BillNumber, 0, BP_Sum, (BP_Product == 0), BP_BillTypeText, BP_BillType, BP_PayKind, BP_Product: BP_Product))
                             {
                                 log.Write("save_fiscal_check ок");
                                 return "ok";
@@ -336,7 +337,7 @@ namespace RemotePump_Driver
                         string DP_DocKind = data_array[3];
                         string DP_DockImage = data_array[0].Replace("\\n", "\r\n");
     
-                        if (Form1.Driver.SaveReciept(DP_DockImage, DP_DateTime, TID, BP_SerialNum1, BP_BillNumber1, DP_DocType, DocKind: DP_DocKind))
+                        if (Driver.SaveReciept(DP_DockImage, DP_DateTime, TID, BP_SerialNum1, BP_BillNumber1, DP_DocType, DocKind: DP_DocKind))
                         {
                             return "ok";
                         }
@@ -371,7 +372,7 @@ namespace RemotePump_Driver
                                             var FillingOverAmount = decimal.Parse(data_lines[2]);
                                             var Price = decimal.Parse(data_lines[3]);
                                             var Discont = (data_lines.Length > 4) ? decimal.Parse(data_lines[4]) : 0;
-                                            result = (Form1.Driver.UpdateFillingOver(FillingOverAmount, Price, trans_id, Discont));
+                                            result = (Driver.UpdateFillingOver(FillingOverAmount, Price, trans_id, Discont));
                                         }
                                         catch (Exception ex)
                                         {
@@ -407,7 +408,7 @@ namespace RemotePump_Driver
                                     int index = data_lines[z].IndexOf("=");
                                     if (index > 0 && int.TryParse(data_lines[z].Substring(0, index), out em))
                                     {
-                                        Form1.Driver.InsertCardInfo(DateTime.Now, data_lines[z].Substring(index + 1, data_lines[z].Length - index - 1), em, tid);
+                                        Driver.InsertCardInfo(DateTime.Now, data_lines[z].Substring(index + 1, data_lines[z].Length - index - 1), em, tid);
                                         counter++;
                                     }
                                 }
@@ -448,7 +449,7 @@ namespace RemotePump_Driver
 
        //     bool result = false;
 #warning Дописать обработку разблокировки ТРК
-            if (Form1.Driver.HoldPump(PumpNo, true))//true)//main.callback_ReleasePump(PumpNo))
+            if (Driver.HoldPump(PumpNo, true))//true)//main.callback_ReleasePump(PumpNo))
             {
                 try
                 {
@@ -462,9 +463,9 @@ namespace RemotePump_Driver
         public OrderInfo GetDoseInfo(string OrderRRN)
         {
             
-            lock (Form1.Driver.TransMemory)
+            lock (Driver.TransMemory)
             {
-                var trans = (from t in Form1.Driver.TransMemory where t.Value.OrderRRN == OrderRRN && t.Value.TID == TID select t.Value).ToArray();
+                var trans = (from t in Driver.TransMemory where t.Value.OrderRRN == OrderRRN && t.Value.TID == TID select t.Value).ToArray();
                 if (trans.Length > 0)
                     return trans[0];
             }
@@ -477,20 +478,20 @@ namespace RemotePump_Driver
         {
             if (pumpLocked_global.ContainsKey(Order.PumpNo) && pumpLocked_global[Order.PumpNo] != TID)
                 return false;
-            return Form1.Driver.SetDose(Order)>0;
+            return Driver.SetDose(Order)>0;
         }
         public bool CancelDose(OrderInfo Order)
         {
-            return Form1.Driver.CancelDose(Order.OrderRRN);// main.callback_CANCEL_TRANS(Order.PumpNo);
+            return Driver.CancelDose(Order.OrderRRN);// main.callback_CANCEL_TRANS(Order.PumpNo);
         }
         public bool CancelDose(string OrderRRN)
         {
-            return Form1.Driver.CancelDose(OrderRRN);// main.callback_CANCEL_TRANS(Order.PumpNo);
+            return Driver.CancelDose(OrderRRN);// main.callback_CANCEL_TRANS(Order.PumpNo);
         }
         public ProductInformation[] GetProducts()
         {            
             List<ProductInformation> ret = new List<ProductInformation>();
-            var prods = Form1.Driver.Fuels;
+            var prods = Driver.Fuels;
             foreach (var prod in prods)
             {
                 ret.Add(new ProductInformation() { Name = prod.Value.Name, BasePrice = prod.Value.Price, Code = prod.Value.ID});
@@ -515,17 +516,17 @@ namespace RemotePump_Driver
                     return pumpInformationMem[No].Value;
             }
             //#warning Дописать обработку получения активного топлива
-            if (!Form1.Driver.Pumps.ContainsKey(No))
+            if (!Driver.Pumps.ContainsKey(No))
                 return new PumpInformation();
           //  log.Write("GetPumpInformation" + No.ToString());
             
-            var fuels = Form1.Driver.Pumps[No].Fuels;
+            var fuels = Driver.Pumps[No].Fuels;
             
 
           //  main.FuelListItem[] fuels;
             PumpInformation ret = new PumpInformation();
             List<ProductInformation> prodInfo = new List<ProductInformation>();
-            var pump_status = Form1.Driver.GetDose(No);
+            var pump_status = Driver.GetDose(No);
             //log.Write("callback_GetPumpStatus: " + pump_status);
            
         //    log.WriteFormated("Status: {0}, ActiveFuel: {1}", Status, ActiveFuel);
@@ -557,9 +558,9 @@ namespace RemotePump_Driver
                     ret.State = PumpState.Filling;
                     if (pump_status.TransID > 0)
                     {
-                        lock (Form1.Driver.TransMemory)
+                        lock (Driver.TransMemory)
                         {
-                            ret.TransactionID = Form1.Driver.TransMemory.SingleOrDefault(i=>i.Key==pump_status.TransID).Value.OrderRRN??"";
+                            ret.TransactionID = Driver.TransMemory.SingleOrDefault(i=>i.Key==pump_status.TransID).Value.OrderRRN??"";
                         }
 
                       //  log.Write($"{ret.PreselQuantity:0.00}/{ret.FillingQuantity:0.00}/{ret.FillingPrice:0.00}");

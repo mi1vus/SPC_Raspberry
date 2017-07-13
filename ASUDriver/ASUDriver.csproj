@@ -1,0 +1,197 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{FC235365-8B16-448F-AE33-9C66FB470E34}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>ASUDriver</RootNamespace>
+    <AssemblyName>ASUDriver</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Drawing.Design" />
+    <Reference Include="System.IdentityModel" />
+    <Reference Include="System.IdentityModel.Selectors" />
+    <Reference Include="System.identitymodel.services" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Windows" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AddPayment.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AddPayment.Designer.cs">
+      <DependentUpon>AddPayment.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ConfigMemory.cs" />
+    <Compile Include="Connections.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Connections.Designer.cs">
+      <DependentUpon>Connections.cs</DependentUpon>
+    </Compile>
+    <Compile Include="DebithThread.cs" />
+    <Compile Include="Devices.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Devices.Designer.cs">
+      <DependentUpon>Devices.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Driver.cs" />
+    <Compile Include="enter_val.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="enter_val.Designer.cs">
+      <DependentUpon>enter_val.cs</DependentUpon>
+    </Compile>
+    <Compile Include="IP_Request.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="IP_Request.Designer.cs">
+      <DependentUpon>IP_Request.cs</DependentUpon>
+    </Compile>
+    <Compile Include="IRemote.cs" />
+    <Compile Include="IRemotePump.cs" />
+    <Compile Include="License.cs" />
+    <Compile Include="Logger.cs" />
+    <Compile Include="Marshal.cs" />
+    <Compile Include="PayTypes.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PayTypes.Designer.cs">
+      <DependentUpon>PayTypes.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="QuickLaunch.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="QuickLaunch.Designer.cs">
+      <DependentUpon>QuickLaunch.cs</DependentUpon>
+    </Compile>
+    <Compile Include="RemotePump.cs" />
+    <Compile Include="Request.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Request.Designer.cs">
+      <DependentUpon>Request.cs</DependentUpon>
+    </Compile>
+    <Compile Include="RunCmd.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="RunCmd.Designer.cs">
+      <DependentUpon>RunCmd.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Serialize.cs" />
+    <Compile Include="Settings.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings.Designer.cs">
+      <DependentUpon>Settings.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Shell.cs" />
+    <Compile Include="SimpleActionManager.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SimpleActionManager.Designer.cs">
+      <DependentUpon>SimpleActionManager.cs</DependentUpon>
+    </Compile>
+    <Compile Include="SortCommands.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SortCommands.Designer.cs">
+      <DependentUpon>SortCommands.cs</DependentUpon>
+    </Compile>
+    <Compile Include="StationCommon.cs" />
+    <Compile Include="TerminalSelection.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="TerminalSelection.Designer.cs">
+      <DependentUpon>TerminalSelection.cs</DependentUpon>
+    </Compile>
+    <Compile Include="XmlPumpClient.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="AddPayment.resx">
+      <DependentUpon>AddPayment.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Connections.resx">
+      <DependentUpon>Connections.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Devices.resx">
+      <DependentUpon>Devices.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="enter_val.resx">
+      <DependentUpon>enter_val.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="IP_Request.resx">
+      <DependentUpon>IP_Request.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="PayTypes.resx">
+      <DependentUpon>PayTypes.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="QuickLaunch.resx">
+      <DependentUpon>QuickLaunch.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Request.resx">
+      <DependentUpon>Request.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="RunCmd.resx">
+      <DependentUpon>RunCmd.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Settings.resx">
+      <DependentUpon>Settings.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="SimpleActionManager.resx">
+      <DependentUpon>SimpleActionManager.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="SortCommands.resx">
+      <DependentUpon>SortCommands.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="TerminalSelection.resx">
+      <DependentUpon>TerminalSelection.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

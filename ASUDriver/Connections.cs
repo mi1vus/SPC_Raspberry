@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Windows.Forms;
+using ASUDriver;
 using SPC_Raspberry;
 
 namespace SmartPumpControlRemote
@@ -22,9 +23,9 @@ namespace SmartPumpControlRemote
         {
             //var dlg_result = MessageBox.Show("Сохранить изменения сделанные на странице?", "Сохранение изменений", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             //if ()
-            Form1.Driver.Params["port"] = server_port.Value.ToString();
-            Form1.Driver.ServiceOperationTimeout = (int)service_timeout.Value;
-            Form1.Driver.SaveParams();
+            Driver.Params["port"] = server_port.Value.ToString();
+            Driver.ServiceOperationTimeout = (int)service_timeout.Value;
+            Driver.SaveParams();
 
             ConfigMemory config = ConfigMemory.GetConfigMemory("Benzuber");
             config["enable"] = benzuber_enable.Checked.ToString().ToLower();
@@ -64,13 +65,13 @@ namespace SmartPumpControlRemote
         private void Connections_Shown(object sender, EventArgs e)
         {
             int port = 1111;
-            if(Form1.Driver.Params.ContainsKey("port") && int.TryParse(Form1.Driver.Params["port"]??"1111", out port))
+            if(Driver.Params.ContainsKey("port") && int.TryParse(Driver.Params["port"]??"1111", out port))
             {
                 server_port.Value = port;
             }
             else
                 server_port.Value = 1111;
-            service_timeout.Value = Form1.Driver.ServiceOperationTimeout;
+            service_timeout.Value = Driver.ServiceOperationTimeout;
 
             ConfigMemory config = ConfigMemory.GetConfigMemory("Benzuber");
             benzuber_enable.Checked = config["enable"] == "true";
@@ -83,7 +84,7 @@ namespace SmartPumpControlRemote
             }
             try
             {
-                var fuels = Form1.Driver.Fuels.Values.ToArray();
+                var fuels = Driver.Fuels.Values.ToArray();
                 for(int z=0; z<fuels.Length; z++)
                 {
                     listView1.Items.Add(new ListViewItem(new string[] { fuels[z].InternalCode.ToString(), $"{fuels[z].Name}", fuels[z].ID.ToString(), config["fuel_code_" + fuels[z].ID]  }));

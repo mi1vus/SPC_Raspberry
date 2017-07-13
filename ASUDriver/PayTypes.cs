@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Linq;
 using System.Windows.Forms;
+using ASUDriver;
 using SPC_Raspberry;
 
 namespace SmartPumpControlRemote
@@ -15,8 +16,8 @@ namespace SmartPumpControlRemote
 
         private void button1_Click(object sender, EventArgs e)
         {
-            Form1.Driver.Params["CardType"] = text;
-            Form1.Driver.SaveParams();
+            Driver.Params["CardType"] = text;
+            Driver.SaveParams();
             Close();
         }
         string text
@@ -34,7 +35,7 @@ namespace SmartPumpControlRemote
         private void PayTypes_Load(object sender, EventArgs e)
         {
             listView1.Items.Clear();
-            var items = Form1.Driver.GetCardTypes().Split(';');
+            var items = ASUDriver.Driver.GetCardTypes().Split(';');
             foreach(var item in items)
             {
                 //MessageBox.Show($"Test1 {item}");

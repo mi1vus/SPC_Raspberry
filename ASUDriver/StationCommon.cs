@@ -11,6 +11,7 @@ using System.ServiceModel.Channels;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
+using ASUDriver;
 using SPC_Raspberry;
 using static BenzuberServer.StationCommon;
 using static BenzuberServer.StationGate;
@@ -207,7 +208,7 @@ namespace BenzuberServer
                     log.Write(string.Format("Запрос на установку заказа. PumpNum: {0}, Fuel: {1}, TransID: {2}, Amount: {3}",
                         PumpNum, Fuel, TransID, Amount));
 
-                    var product = (from fuel in Form1.Driver.Fuels
+                    var product = (from fuel in Driver.Fuels
                                    where fuel.Value.ID == get_int_code(Fuel)
                                    select fuel.Value).SingleOrDefault();
                     if (product.Name == null)
@@ -454,13 +455,13 @@ namespace BenzuberServer
                     log.Write("Получение информации о АЗС");
                     var info = new StationInformaton()
                     {
-                        Fuels = new List<FuelInfo>(from fuel in Form1.Driver.Fuels select new FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
+                        Fuels = new List<FuelInfo>(from fuel in Driver.Fuels select new FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
                     };
 
                     foreach (var fuel in info.Fuels) log.Write($"{fuel.Code}. {fuel.Name} = {fuel.Price:0.00}р");
 
                     List<PumpInfo> pumps = new List<PumpInfo>();
-                    foreach (var p in Form1.Driver.Pumps)
+                    foreach (var p in Driver.Pumps)
                     {
                         var state = pump.GetPumpInformation(p.Value.Pump);
                         log.Write($"{state.ToString()}");
