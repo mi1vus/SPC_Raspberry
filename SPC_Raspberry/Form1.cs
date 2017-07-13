@@ -3140,30 +3140,25 @@ $"Попытка \"{z + 1}\" результат: {result}");
         public Form1()
         {
             InitializeComponent();
-            EndFilling = button3;
-            FillingUp = button5;
-            FillingDown = button6;
-            Logger = textBox1;
             Orders = new Dictionary<int, OrderInfo>();
-            comboBox1.SelectedIndex = 0;
             OpenDriver();
         }
 
-        public static Button EndFilling;
-        public static Button FillingUp;
-        public static Button FillingDown;
-        public static TextBox Logger;
+        //public static Button EndFilling;
+        //public static Button FillingUp;
+        //public static Button FillingDown;
+        //public static TextBox Logger;
 
-        public static double Quantity = 0;
-        public static double Price = 0;
-        public static double Amount = 0;
+        //public static double Quantity = 0;
+        //public static double Price = 0;
+        //public static double Amount = 0;
 
         private static Dictionary<int, RemotePump_Driver.OrderInfo> Orders;
 
         public static void log(string txt)
         {
-            Logger.Text += txt;
-            //Driver.log.Write(txt);
+            //Logger.Text += txt;
+            Driver.log.Write(txt);
             return;
             string path = @"app_log.log";
             // This text is added only once to the file.
@@ -3181,7 +3176,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
             }
         }
         public delegate void InvokeEndFillingDelegate(double amount);
-        public delegate void InvokeLogDelegate(string text);
+        //public delegate void InvokeLogDelegate(string text);
 
         //private void button1_Click(object sender, EventArgs e)
         //{
@@ -3211,7 +3206,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
         private void button4_Click(object sender, EventArgs e)
         {
             int terminal = 1;
-            int pump = int.Parse(comboBox1.SelectedItem.ToString());
+            int pump = 1;//int.Parse(comboBox1.SelectedItem.ToString());
             int pump2 = 1;
             int nozzle = 1;
 
@@ -3282,19 +3277,9 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
         public void EndFillingEnabled(double amount)
         {
-            EndFilling.Enabled = true;
-            FillingUp.Enabled = true;
-            FillingDown.Enabled = true;
-            label2.Text = amount.ToString("F3");
-            label3.Text = amount.ToString("F3");
         }
         public void EndFillingDisabled()
         {
-            EndFilling.Enabled = false;
-            FillingUp.Enabled = false;
-            FillingDown.Enabled = false;
-            label2.Text = "-";
-            label3.Text = "-";
         }
 
         public void OpenDriver()
@@ -3321,18 +3306,18 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         orderMode = "Литровый заказ";
                     }
 
-                    Quantity = (float)ATrans.Quantity / 1000;
-                    Price = (float)ATrans.Price / 100;
-                    Amount = (float)ATrans.Amount / 100;
+                    //Quantity = (float)ATrans.Quantity / 1000;
+                    //Price = (float)ATrans.Price / 100;
+                    //Amount = (float)ATrans.Amount / 100;
 
-                    label1.BeginInvoke(new InvokeLogDelegate(log),
+                    log(
                         "ТРК:            " + ATrans.Pump
                         + "\r\nОснование:      " + ATrans.PaymentCode
                         + "\r\nПродукт:        " + ATrans.Fuel
                         + "\r\nРежим заказа:   " + orderMode
-                        + "\r\nКоличество:     " + Quantity
-                        + "\r\nЦена:           " + Price
-                        + "\r\nСумма:          " + Amount
+                        //+ "\r\nКоличество:     " + Quantity
+                        //+ "\r\nЦена:           " + Price
+                        //+ "\r\nСумма:          " + Amount
                         + "\r\nНомер карты:    " + ATrans.CardNum
                         + "\r\nRRN Транзакции: " + ATrans.RRN
                         + "\r\n---------------------------"
@@ -3358,7 +3343,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                                         PriceMem = ATrans.Price;
                                 */
                                 //EndFilling.Enabled = true;
-                                EndFilling.BeginInvoke(new InvokeEndFillingDelegate(EndFillingEnabled), Amount);
+                                //EndFilling.BeginInvoke(new InvokeEndFillingDelegate(EndFillingEnabled), Amount);
                     return true;
                 }
                 return false;
@@ -3552,9 +3537,9 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                         Driver.VolumeMem = 0;
                         Driver.AmountMem = 0;
-                        EndFilling.Enabled = false;
-                        FillingUp.Enabled = false;
-                        FillingDown.Enabled = false;
+                        //EndFilling.Enabled = false;
+                        //FillingUp.Enabled = false;
+                        //FillingDown.Enabled = false;
                         OrderInfo order = new OrderInfo();
 
                         int cnt = 2;
@@ -3808,14 +3793,16 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                         ++Driver.TransCounter;
 
+                        var summ = (DocKindCode != 4) ? (decimal) Amount/100m : -(decimal) Amount/100m;
+
                         XmlPumpClient.FiscalEventReceipt(Driver.terminal, 1/*order.PumpNo*/,
                             GetShiftDocNum(), GetDocNum(), GetShiftNum(),
-                            (decimal)Amount / 100m/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, "123123123123" /*order.OrderRRN*/, 1);
+                            summ/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, "123123123123" /*order.OrderRRN*/, 1);
                         log($"чек:\r\n" +
                             $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
                             $"GetDocNum: {GetDocNum()}\r\n" +
                             $"GetShiftNum: {GetShiftNum()}\r\n" +
-                            $"OverAmount: {(decimal)Amount / 100m}\r\n" +
+                            $"OverAmount: {summ}\r\n" +
                             $"OrderRRN: {123123123123/*order.OrderRRN*/}\r\n");
 
                         DebithThread.SetTransID(Driver.TransCounter);
@@ -3847,11 +3834,17 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                 object res;
                 if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit), out res))
+                {
                     log(
                         Driver.Description() + " успешно открыта!\r\n");
+                    label1.Text += Driver.Description() + " успешно открыта!\r\n";
+                }
                 else
+                {
                     log(
                         Driver.Description() + " нет ответа от АСУ!\r\n");
+                    label1.Text += Driver.Description() + " нет ответа от АСУ!\r\n";
+                }
             }
             catch (Exception ex)
             {
