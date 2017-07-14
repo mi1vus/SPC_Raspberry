@@ -301,6 +301,7 @@ namespace ASUDriver
                 {
                     //MessageBox.Show($"Disconnected: error code {e.NativeErrorCode}!");
                     //throw new Exception("ERROR Разрыв соединения с попыткой восстановления!");
+
                     File.AppendAllText("exchange2.log", $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
 
                     IPHostEntry hostEntry = null;
@@ -408,7 +409,15 @@ namespace ASUDriver
         public static void ReceiveMessageSocket()
         {
             StringBuilder builder = new StringBuilder();
-            File.WriteAllText("exchange2.log", string.Empty);
+            if (File.Exists("exchange2.log"))
+            {
+                try
+                {
+                    File.Delete("exchange2.log");
+                }
+                catch { }
+            }
+            //File.WriteAllText("exchange2.log", string.Empty);
             //File.Delete("exchange2.log");
             while (true)
             {

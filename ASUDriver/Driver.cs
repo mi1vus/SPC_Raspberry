@@ -8,8 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ProjectSummer.Repository;
 using RemotePump_Driver;
-using ServioPumpGAS_Driver;
-using SPC_Raspberry;
+//using ServioPumpGAS_Driver;
 
 namespace ASUDriver
 {
@@ -1902,7 +1901,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                 FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
 
-                var discount = 100; //(order.BasePrice - order.Price) * order.Quantity;
+                var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
                 var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
                 int allowed = 0;
                 foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)

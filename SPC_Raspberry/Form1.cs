@@ -164,72 +164,72 @@ namespace SPC_Raspberry
 
         public void OpenDriver()
         {
-            DebithThread.DebitCallback =
-            (long TransactID) =>
-            {
-                IntPtr ATransPtr = Marshal.AllocHGlobal(36);
+            //DebithThread.DebitCallback =
+            //(long TransactID) =>
+            //{
+            //    IntPtr ATransPtr = Marshal.AllocHGlobal(36);
 
-                            //log("Получение ниформации о заказе, TransactID: " + TransactID + "\r\n");
-                            Driver.GetTransaction(TransactID, ATransPtr);
-                TransactionInfo ATrans = Driver.GetTransactionInfo(TransactID, ATransPtr);
-                if (ATrans != null)
-                {
-                                //Marshal.PtrToStructure(ATransPtr, ATrans);
-                                string Eof2 = "0";
-                    string orderMode = "0";
-                    if (ATrans.OrderInMoney == 1)
-                    {
-                        orderMode = "Денежный заказ";
-                    }
-                    else
-                    {
-                        orderMode = "Литровый заказ";
-                    }
+            //                //log("Получение ниформации о заказе, TransactID: " + TransactID + "\r\n");
+            //                Driver.GetTransaction(TransactID, ATransPtr);
+            //    TransactionInfo ATrans = Driver.GetTransactionInfo(TransactID, ATransPtr);
+            //    if (ATrans != null)
+            //    {
+            //                    //Marshal.PtrToStructure(ATransPtr, ATrans);
+            //                    string Eof2 = "0";
+            //        string orderMode = "0";
+            //        if (ATrans.OrderInMoney == 1)
+            //        {
+            //            orderMode = "Денежный заказ";
+            //        }
+            //        else
+            //        {
+            //            orderMode = "Литровый заказ";
+            //        }
 
-                    //Quantity = (float)ATrans.Quantity / 1000;
-                    //Price = (float)ATrans.Price / 100;
-                    //Amount = (float)ATrans.Amount / 100;
+            //        //Quantity = (float)ATrans.Quantity / 1000;
+            //        //Price = (float)ATrans.Price / 100;
+            //        //Amount = (float)ATrans.Amount / 100;
 
-                    log(
-                        "ТРК:            " + ATrans.Pump
-                        + "\r\nОснование:      " + ATrans.PaymentCode
-                        + "\r\nПродукт:        " + ATrans.Fuel
-                        + "\r\nРежим заказа:   " + orderMode
-                        //+ "\r\nКоличество:     " + Quantity
-                        //+ "\r\nЦена:           " + Price
-                        //+ "\r\nСумма:          " + Amount
-                        + "\r\nНомер карты:    " + ATrans.CardNum
-                        + "\r\nRRN Транзакции: " + ATrans.RRN
-                        + "\r\n---------------------------"
-                        + "\r\n\r\n");
+            //        log(
+            //            "ТРК:            " + ATrans.Pump
+            //            + "\r\nОснование:      " + ATrans.PaymentCode
+            //            + "\r\nПродукт:        " + ATrans.Fuel
+            //            + "\r\nРежим заказа:   " + orderMode
+            //            //+ "\r\nКоличество:     " + Quantity
+            //            //+ "\r\nЦена:           " + Price
+            //            //+ "\r\nСумма:          " + Amount
+            //            + "\r\nНомер карты:    " + ATrans.CardNum
+            //            + "\r\nRRN Транзакции: " + ATrans.RRN
+            //            + "\r\n---------------------------"
+            //            + "\r\n\r\n");
 
-                                /*
-                                                        EBitBtn8->Enabled = true;
-                                                        ss << TransactID;
-                                                        EMaskEdit1->Text = ss.str().c_str();
-                                                        ss.str(std::string());
-                                                        ss << ((float)ATrans.Quantity / 1000);
-                                                        EMaskEdit2->Text = ss.str().c_str();
-                                                        ss.str(std::string());
-                                                        ss << ((float)ATrans.Price / 100);
-                                                        EMaskEdit3->Text = ss.str().c_str();
-                                                        ss.str(std::string());
-                                                        ss << ((float)ATrans.Amount / 100);
-                                                        EMaskEdit4->Text = ss.str().c_str();
-                                                        ss.str(std::string());
+            //                    /*
+            //                                            EBitBtn8->Enabled = true;
+            //                                            ss << TransactID;
+            //                                            EMaskEdit1->Text = ss.str().c_str();
+            //                                            ss.str(std::string());
+            //                                            ss << ((float)ATrans.Quantity / 1000);
+            //                                            EMaskEdit2->Text = ss.str().c_str();
+            //                                            ss.str(std::string());
+            //                                            ss << ((float)ATrans.Price / 100);
+            //                                            EMaskEdit3->Text = ss.str().c_str();
+            //                                            ss.str(std::string());
+            //                                            ss << ((float)ATrans.Amount / 100);
+            //                                            EMaskEdit4->Text = ss.str().c_str();
+            //                                            ss.str(std::string());
 
-                                                        AmountMem = ATrans.Amount;
-                                                        VolumeMem = ATrans.Quantity;
-                                                        PriceMem = ATrans.Price;
-                                */
-                                //EndFilling.Enabled = true;
-                                //EndFilling.BeginInvoke(new InvokeEndFillingDelegate(EndFillingEnabled), Amount);
-                    return true;
-                }
-                return false;
-            };
-            Thread myThread = new Thread(DebithThread.Execute);
-            myThread.Start(); // запускаем поток
+            //                                            AmountMem = ATrans.Amount;
+            //                                            VolumeMem = ATrans.Quantity;
+            //                                            PriceMem = ATrans.Price;
+            //                    */
+            //                    //EndFilling.Enabled = true;
+            //                    //EndFilling.BeginInvoke(new InvokeEndFillingDelegate(EndFillingEnabled), Amount);
+            //        return true;
+            //    }
+            //    return false;
+            //};
+            //Thread myThread = new Thread(DebithThread.Execute);
+            //myThread.Start(); // запускаем поток
 
             try
             {
@@ -316,7 +316,7 @@ namespace SPC_Raspberry
 
                         //    Driver.FillingOver(Driver.TransCounter, (int)(Order.Quantity * 100), (int)(Order.Amount*100));
 
-                        DebithThread.SetTransID(Driver.TransCounter);
+                        //DebithThread.SetTransID(Driver.TransCounter);
                         return Driver.TransCounter;
                     },
                     //Запрос состояние ТРК
@@ -685,7 +685,7 @@ namespace SPC_Raspberry
                             $"OverAmount: {summ}\r\n" +
                             $"OrderRRN: {123123123123/*order.OrderRRN*/}\r\n");
 
-                        DebithThread.SetTransID(Driver.TransCounter);
+                        //DebithThread.SetTransID(Driver.TransCounter);
 
                         return 1;
                     },

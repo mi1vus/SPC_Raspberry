@@ -49,139 +49,20 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AddPayment.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="AddPayment.Designer.cs">
-      <DependentUpon>AddPayment.cs</DependentUpon>
-    </Compile>
     <Compile Include="ConfigMemory.cs" />
-    <Compile Include="Connections.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Connections.Designer.cs">
-      <DependentUpon>Connections.cs</DependentUpon>
-    </Compile>
-    <Compile Include="DebithThread.cs" />
-    <Compile Include="Devices.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Devices.Designer.cs">
-      <DependentUpon>Devices.cs</DependentUpon>
-    </Compile>
     <Compile Include="Driver.cs" />
-    <Compile Include="enter_val.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="enter_val.Designer.cs">
-      <DependentUpon>enter_val.cs</DependentUpon>
-    </Compile>
-    <Compile Include="IP_Request.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="IP_Request.Designer.cs">
-      <DependentUpon>IP_Request.cs</DependentUpon>
-    </Compile>
     <Compile Include="IRemote.cs" />
     <Compile Include="IRemotePump.cs" />
     <Compile Include="License.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Marshal.cs" />
-    <Compile Include="PayTypes.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="PayTypes.Designer.cs">
-      <DependentUpon>PayTypes.cs</DependentUpon>
-    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="QuickLaunch.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="QuickLaunch.Designer.cs">
-      <DependentUpon>QuickLaunch.cs</DependentUpon>
-    </Compile>
     <Compile Include="RemotePump.cs" />
-    <Compile Include="Request.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Request.Designer.cs">
-      <DependentUpon>Request.cs</DependentUpon>
-    </Compile>
-    <Compile Include="RunCmd.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="RunCmd.Designer.cs">
-      <DependentUpon>RunCmd.cs</DependentUpon>
-    </Compile>
+    <Compile Include="RunCmd.cs" />
     <Compile Include="Serialize.cs" />
-    <Compile Include="Settings.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Settings.Designer.cs">
-      <DependentUpon>Settings.cs</DependentUpon>
-    </Compile>
     <Compile Include="Shell.cs" />
-    <Compile Include="SimpleActionManager.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="SimpleActionManager.Designer.cs">
-      <DependentUpon>SimpleActionManager.cs</DependentUpon>
-    </Compile>
-    <Compile Include="SortCommands.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="SortCommands.Designer.cs">
-      <DependentUpon>SortCommands.cs</DependentUpon>
-    </Compile>
     <Compile Include="StationCommon.cs" />
-    <Compile Include="TerminalSelection.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="TerminalSelection.Designer.cs">
-      <DependentUpon>TerminalSelection.cs</DependentUpon>
-    </Compile>
     <Compile Include="XmlPumpClient.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="AddPayment.resx">
-      <DependentUpon>AddPayment.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Connections.resx">
-      <DependentUpon>Connections.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Devices.resx">
-      <DependentUpon>Devices.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="enter_val.resx">
-      <DependentUpon>enter_val.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="IP_Request.resx">
-      <DependentUpon>IP_Request.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="PayTypes.resx">
-      <DependentUpon>PayTypes.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="QuickLaunch.resx">
-      <DependentUpon>QuickLaunch.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Request.resx">
-      <DependentUpon>Request.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="RunCmd.resx">
-      <DependentUpon>RunCmd.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Settings.resx">
-      <DependentUpon>Settings.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="SimpleActionManager.resx">
-      <DependentUpon>SimpleActionManager.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="SortCommands.resx">
-      <DependentUpon>SortCommands.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="TerminalSelection.resx">
-      <DependentUpon>TerminalSelection.cs</DependentUpon>
-    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

@@ -9,7 +9,6 @@ using System.IdentityModel.Tokens;
 using System.Windows.Forms;
 using ASUDriver;
 using ProjectSummer.Repository;
-using SPC_Raspberry;
 
 namespace RemotePump_Driver
 {

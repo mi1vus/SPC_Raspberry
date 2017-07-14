@@ -12,7 +12,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
 using ASUDriver;
-using SPC_Raspberry;
 using static BenzuberServer.StationCommon;
 using static BenzuberServer.StationGate;
 using static BenzuberServer.StationGate.StationInformaton;

@@ -37,11 +37,11 @@ namespace SmartPumpControlRemote
         }
         public static string ReqestTID()
         {
-            if (TID_to_IP.Count > 0)
-                return TerminalSelection.SelectTerminal((from item in TID_to_IP orderby item.Key select item.Key).ToArray());
+            //if (TID_to_IP.Count > 0)
+            //    return TerminalSelection.SelectTerminal((from item in TID_to_IP orderby item.Key select item.Key).ToArray());
             //else if (TID_to_IP.Count > 0)
             //    return TID_to_IP.First().Key;
-            else
+            //else
                 System.Windows.Forms.MessageBox.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             return "";
         }
@@ -49,7 +49,7 @@ namespace SmartPumpControlRemote
         {
             if (setIP(TID))
             {
-                new Devices().ShowDialog();
+                //new Devices().ShowDialog();
             }
         }
         public static string[] GetActions(string TID)
@@ -89,7 +89,7 @@ namespace SmartPumpControlRemote
                         else
                         {
                             var Commands = ProjectSummer.Repository.Serialization.Deserialize<RunCmd.Cmd[]>(Dir + ActionName + ".xml");
-                            RunCmd.ShowDialog(Commands, ActionName);
+                            //RunCmd.ShowDialog(Commands, ActionName);
                             break;
                         }
                     }
@@ -109,10 +109,10 @@ namespace SmartPumpControlRemote
                     var dir = new System.IO.DirectoryInfo(Dir);
                     if (!dir.Exists)
                         dir.Create();
-                    Devices dev = new Devices() { ActionName = ActionName};
-                    dev.SavePath = Dir;
-                    //  dev.Text = "Редактирование (" + ActionName + ")";
-                    dev.ShowDialog();
+                    //Devices dev = new Devices() { ActionName = ActionName};
+                    //dev.SavePath = Dir;
+                    ////  dev.Text = "Редактирование (" + ActionName + ")";
+                    //dev.ShowDialog();
                 }
                 catch { }
             }
