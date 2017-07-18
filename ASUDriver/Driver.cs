@@ -1899,7 +1899,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     $"Liters: {(endMessage?.Liters ?? 0) * 10}\r\n" +
                     $"Money: {endMessage?.Money ?? 0}\r\n");
 
-                FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
+                FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, (int)((endMessage?.Liters ?? 0)/100m*(order.Price*100)));
 
                 var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
                 var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
@@ -2827,6 +2827,10 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                                                 int FactDoc,
                                                                 int BP_Product,
                                                                 long TransID,
+                                                                int PumpNo,
+                                                                int ShiftDocNum,
+                                                                int ShiftNum,
+                                                                string OrderRRN,
                                                                 IntPtr ctx);
 
             #endregion
@@ -3009,14 +3013,15 @@ Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, 
             }
 
             public static bool SaveReciept(string RecieptText, DateTime _DateTime, string DeviceName, string DeviceSerial, int DocNo = 0,
-                int DocType = 1, decimal Amount = 0, bool VarCheck = false, string DocKind = "", int DocKindCode = 0, int PayType = 0, long TransID = 0, bool FactDoc = false, int BP_Product = 0)
+                int DocType = 1, decimal Amount = 0, bool VarCheck = false, string DocKind = "", int DocKindCode = 0, int PayType = 0, long TransID = 0,
+                            int PumpNo = 0, int ShiftDocNum = 0, int ShiftNum = 0, string OrderRRN = "", bool FactDoc = false, int BP_Product = 0)
             {
                 if (SaveReciept_callback != null)
                 {
                     try
                     {
                         lock (locker)
-                            return SaveReciept_callback.Invoke(RecieptText, BitConverter.DoubleToInt64Bits(_DateTime.ToOADate()), DeviceName, DeviceSerial, DocNo, DocType, (int)(Amount * 100), VarCheck ? 1 : 0, DocKind, DocKindCode, PayType, FactDoc ? 1 : 0, BP_Product, TransID, ctx) == 1;
+                            return SaveReciept_callback.Invoke(RecieptText, BitConverter.DoubleToInt64Bits(_DateTime.ToOADate()), DeviceName, DeviceSerial, DocNo, DocType, (int)(Amount * 100), VarCheck ? 1 : 0, DocKind, DocKindCode, PayType, FactDoc ? 1 : 0, BP_Product, TransID, PumpNo, ShiftDocNum, ShiftNum, OrderRRN, ctx) == 1;
                     }
                     catch { }
                     return true;

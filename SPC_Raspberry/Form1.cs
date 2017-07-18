@@ -644,9 +644,11 @@ namespace SPC_Raspberry
                         return 1;
                     },
                     //Сохранение документа SaveReciept_Delegate
+                    ///  DocType 0 - фискальные 1 - нефискальные 2 - отчет
                     (string RecieptText, long _DateTime, string DeviceName, string DeviceSerial,
                             int DocNo, int DocType, int Amount, int VarCheck, string DocKind, int DocKindCode,
-                            int PayType, int FactDoc, int BP_Product, long Trans_ID, IntPtr ctx) =>
+                            int PayType, int FactDoc, int BP_Product, long Trans_ID, 
+                            int PumpNo, int ShiftDocNum, int ShiftNum, string OrderRRN, IntPtr ctx) =>
                     {
                         //SYSTEMTIME time;
                         //VariantTimeToSystemTime(_DateTime, &time);
@@ -665,6 +667,10 @@ namespace SPC_Raspberry
                         + "\r\nЧек по факту:       " + FactDoc
                         + "\r\nНомер продукта:     " + BP_Product
                         + "\r\nID Транзакции:      " + Trans_ID
+                        + "\r\nID PumpNo:          " + PumpNo
+                        + "\r\nID ShiftDocNum:     " + ShiftDocNum
+                        + "\r\nID ShiftNum:        " + ShiftNum
+                        + "\r\nID OrderRRN:        " + OrderRRN
                         + "\r\n------------------------------------------------------"
                         + "\r\nОбраз Чека:         "
                         + "\r\n" + RecieptText
@@ -673,17 +679,20 @@ namespace SPC_Raspberry
 
                         ++Driver.TransCounter;
 
+                        if (DocType != 0 || PumpNo <= 0)
+                            return 1;
+
                         var summ = (DocKindCode != 4) ? (decimal) Amount/100m : -(decimal) Amount/100m;
 
-                        XmlPumpClient.FiscalEventReceipt(Driver.terminal, 1/*order.PumpNo*/,
-                            GetShiftDocNum(), GetDocNum(), GetShiftNum(),
-                            summ/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, "123123123123" /*order.OrderRRN*/, 1);
+                        XmlPumpClient.FiscalEventReceipt(Driver.terminal, PumpNo/*order.PumpNo*/,
+                            ShiftDocNum, DocNo, ShiftNum,
+                            summ/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, OrderRRN /*order.OrderRRN*/, 1);
                         log($"чек:\r\n" +
-                            $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
-                            $"GetDocNum: {GetDocNum()}\r\n" +
-                            $"GetShiftNum: {GetShiftNum()}\r\n" +
+                            $"GetShiftDocNum: {ShiftDocNum}\r\n" +
+                            $"GetDocNum: {DocNo}\r\n" +
+                            $"GetShiftNum: {ShiftNum}\r\n" +
                             $"OverAmount: {summ}\r\n" +
-                            $"OrderRRN: {123123123123/*order.OrderRRN*/}\r\n");
+                            $"OrderRRN: {OrderRRN/*order.OrderRRN*/}\r\n");
 
                         //DebithThread.SetTransID(Driver.TransCounter);
 

@@ -286,29 +286,52 @@ namespace RemotePump_Driver
                             int BP_BillNumber = int.Parse(data_array[2]);
                             //((reciept.DocType == DocType.Sale) ? 6 : 4).ToString() + "\n"
                             short BP_BillType = short.Parse(data_array[3]);
-                            //((int)pay_type)
+                            //((int)pay_type) Код типа оплаты (нал платежная карта кредитн карта)
                             short BP_PayKind = short.Parse(data_array[4]);
-                            //1
+                            //1 
                             short BP_Section = short.Parse(data_array[5]);
-                            //
+                            //код продукта
                             int BP_Product = int.Parse(data_array[6]);
                             double BP_Price = double.Parse(data_array[7]);
                             double BP_Quantity = double.Parse(data_array[8]);
                             decimal BP_Sum = decimal.Parse(data_array[9]);
+                            // код типа основания
                             int PaymentCode = int.Parse(data_array[10]);
+                            // тип документа
                             string BP_BillTypeText = (BP_BillType == 6) ? "Продажа" : "Возврат";
+                            // текст чека
                             var text = data_array[11].Replace("\\r","\r").Replace("\\n","\n");
+
+                            long tran_id = 0;
 
                             if (data_array.Length >= 13 && data_array[12] != null && data_array[12] != "")
                                 BP_BillTypeText = data_array[12];
 
-                            if (data_array.Length >= 14 && data_array[13] != null && data_array[13] != "" )
-                                BP_BillTypeText = data_array[12];
+                            if (data_array.Length >= 14 && !string.IsNullOrWhiteSpace(data_array[13]))
+                            {
+                                if (!long.TryParse(data_array[13], out tran_id))
+                                    tran_id = 0;
+                            }
+
+                            int BP_Pump = 0;
+                            int BP_ShiftDocNum = 0;
+                            int BP_ShiftNum = 0;
+                            string BP_RNN = "";
+                            if (data_array.Length >= 18 && !string.IsNullOrWhiteSpace(data_array[17]))
+                            {
+                                BP_Pump = int.Parse(data_array[14]);
+                                BP_ShiftDocNum = int.Parse(data_array[15]);
+                                BP_ShiftNum = int.Parse(data_array[16]);
+                                BP_RNN = data_array[17];
+                            }
 
                             if (BP_BillTypeText == "Аванс")
                                 BP_Product = 0;
 
-                            if (Driver.SaveReciept(text, BP_DateTime, TID, BP_SerialNum, BP_BillNumber, 0, BP_Sum, (BP_Product == 0), BP_BillTypeText, BP_BillType, BP_PayKind, BP_Product: BP_Product))
+
+
+                            if (Driver.SaveReciept(text, BP_DateTime, TID, BP_SerialNum, BP_BillNumber, 0, BP_Sum, (BP_Product == 0), BP_BillTypeText, BP_BillType,
+                                BP_PayKind, tran_id, BP_Pump, BP_ShiftDocNum, BP_ShiftNum, BP_RNN, BP_Product: BP_Product))
                             {
                                 log.Write("save_fiscal_check ок");
                                 return "ok";
