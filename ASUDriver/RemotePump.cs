@@ -145,7 +145,8 @@ namespace RemotePump_Driver
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message);
+                //MessageBox.Show(ex.Message);
+                log.Write(ex.Message);
             }
         }
         private string TID;

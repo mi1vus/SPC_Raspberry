@@ -397,7 +397,7 @@ namespace ProjectSummer.Repository
                     return true;
                 }
             }
-            catch (Exception ex) { System.Windows.Forms.MessageBox.Show(ex.ToString()); }
+            catch (Exception ex) { Console.WriteLine(ex.ToString()); }
             return false;
         }
 
