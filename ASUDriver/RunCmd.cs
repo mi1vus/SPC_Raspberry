@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
-using System.Windows.Forms;
+using ProjectSummer.Repository;
+
+//using System.Windows.Forms;
 
 namespace SmartPumpControlRemote
 {
@@ -14,7 +16,7 @@ namespace SmartPumpControlRemote
         }
         public RunCmd()
         {
-             Application.EnableVisualStyles();
+             //Application.EnableVisualStyles();
         }
         bool cancel_flag = false;
         public bool RunCommands()
@@ -69,14 +71,16 @@ namespace SmartPumpControlRemote
                     //if(c != null)
                     //    dlg.AddCommand(c);
                     //else
-                        MessageBox.Show(string.Format("Команда {0} выполняться не будет.\r\nНе введены параметры.", cmd.Command), info, MessageBoxButtons.OK, MessageBoxIcon.Exclamation );
+                    Console.WriteLine(string.Format("Команда {0} выполняться не будет.\r\nНе введены параметры.", cmd.Command));
+                        //MessageBox.Show(string.Format("Команда {0} выполняться не будет.\r\nНе введены параметры.", cmd.Command), info, MessageBoxButtons.OK, MessageBoxIcon.Exclamation );
                 }
                 else
                     dlg.AddCommand(cmd);
 
             }
-            if(dlg.Commands.Count<=0)
-                MessageBox.Show("Отсутствуют команды для выполнения.", info, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            if (dlg.Commands.Count <= 0)
+                Console.WriteLine("Отсутствуют команды для выполнения.");
+                //MessageBox.Show("Отсутствуют команды для выполнения.", info, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
             return true;
         }
         delegate void Void();
@@ -92,25 +96,25 @@ namespace SmartPumpControlRemote
                 {
                     bool exit_enable = true;
                     bool button_retry_visible = false;
-                    Dictionary<string, ListViewGroup> groups = new Dictionary<string, ListViewGroup>();
+                    //Dictionary<string, ListViewGroup> groups = new Dictionary<string, ListViewGroup>();
                     foreach (var c in Commands)
                     {
-                        if (!groups.ContainsKey(c.Device))
-                        {
-                            groups.Add(c.Device, new ListViewGroup(c.DeviceInfo));
-                        }
-                        var item = new ListViewItem(new string[] { c.ToString(), decode_state(c.State) }, groups[c.Device]);
-                        if (c.State == state_enum.Error || c.State == state_enum.Canceled)
-                        {
-                            item.BackColor = Color.LightPink;
-                            button_retry_visible = true;
-                        }
-                        else if (c.State == state_enum.Success)
-                            item.BackColor = Color.LightGreen;
-                        else if (c.State == state_enum.Run)
-                            item.BackColor = Color.LightBlue;
-                        if (c.State == state_enum.Run)
-                            exit_enable = false;
+                        //if (!groups.ContainsKey(c.Device))
+                        //{
+                        //    groups.Add(c.Device, new ListViewGroup(c.DeviceInfo));
+                        //}
+                        //var item = new ListViewItem(new string[] { c.ToString(), decode_state(c.State) }, groups[c.Device]);
+                        //if (c.State == state_enum.Error || c.State == state_enum.Canceled)
+                        //{
+                        //    item.BackColor = Color.LightPink;
+                        //    button_retry_visible = true;
+                        //}
+                        //else if (c.State == state_enum.Success)
+                        //    item.BackColor = Color.LightGreen;
+                        //else if (c.State == state_enum.Run)
+                        //    item.BackColor = Color.LightBlue;
+                        //if (c.State == state_enum.Run)
+                        //    exit_enable = false;
                     }
                     //button_cancel.Enabled = !exit_enable && !cancel_flag;
                     //button_exit.Enabled = exit_enable;

@@ -6,7 +6,7 @@ using System.ServiceModel.Channels;
 //using ServioPump_2._34_Driver;
 using System.IdentityModel.Selectors;
 using System.IdentityModel.Tokens;
-using System.Windows.Forms;
+//using System.Windows.Forms;
 using ASUDriver;
 using ProjectSummer.Repository;
 
@@ -252,6 +252,7 @@ namespace RemotePump_Driver
                         //    double BP_Quantity,
                         //    double BP_Sum,
                         //    int PaymentCode)
+                        log.Write($"save_fiscal_check\n**************************************\n{Data}\n");
                         var data_array = Data.Split('\n');
                         //if (main.callback_BILL_PRINTED(TID, data_array[0], DateTime.Parse(data_array[1]), int.Parse(data_array[2]), short.Parse(data_array[3]), short.Parse(data_array[4]),
                         //    short.Parse(data_array[5]), int.Parse(data_array[6]), double.Parse(data_array[7]), double.Parse(data_array[8]), double.Parse(data_array[9]), int.Parse(data_array[10])))
@@ -293,9 +294,19 @@ namespace RemotePump_Driver
                             short BP_Section = short.Parse(data_array[5]);
                             //код продукта
                             int BP_Product = int.Parse(data_array[6]);
-                            double BP_Price = double.Parse(data_array[7]);
-                            double BP_Quantity = double.Parse(data_array[8]);
+
+                            int OS = Environment.OSVersion.Version.Major;
+                            if (OS <= 4)
+                            {
+                                data_array[7] = data_array[7].Replace(',', '.');
+                                data_array[8] = data_array[8].Replace(',', '.');
+                                data_array[9] = data_array[9].Replace(',', '.');
+                            }
+
+                            decimal BP_Price = decimal.Parse(data_array[7]);
+                            decimal BP_Quantity = decimal.Parse(data_array[8]);
                             decimal BP_Sum = decimal.Parse(data_array[9]);
+                            log.Write($"save_fiscal_check\nBP_Price\n{BP_Price}\nBP_Quantity\n{BP_Quantity}\nBP_Sum\n{BP_Sum}\n");
                             // код типа основания
                             int PaymentCode = int.Parse(data_array[10]);
                             // тип документа
@@ -318,12 +329,32 @@ namespace RemotePump_Driver
                             int BP_ShiftDocNum = 0;
                             int BP_ShiftNum = 0;
                             string BP_RNN = "";
-                            if (data_array.Length >= 18 && !string.IsNullOrWhiteSpace(data_array[17]))
+                            if (data_array.Length >= 18)
                             {
                                 BP_Pump = int.Parse(data_array[14]);
                                 BP_ShiftDocNum = int.Parse(data_array[15]);
                                 BP_ShiftNum = int.Parse(data_array[16]);
-                                BP_RNN = data_array[17];
+                                if (!string.IsNullOrWhiteSpace(data_array[17]))
+                                    BP_RNN = data_array[17];
+                            }
+
+                            decimal BP_PrePrice = 0;
+                            decimal BP_PreQuantity = 0;
+                            decimal BP_PreSum = 0;
+
+                            if (data_array.Length >= 21)
+                            {
+                                if (OS <= 4)
+                                {
+                                    data_array[18] = data_array[18].Replace(',', '.');
+                                    data_array[19] = data_array[19].Replace(',', '.');
+                                    data_array[20] = data_array[20].Replace(',', '.');
+                                }
+
+                                BP_PrePrice = decimal.Parse(data_array[18]);
+                                BP_PreQuantity = decimal.Parse(data_array[19]);
+                                BP_PreSum = decimal.Parse(data_array[20]);
+                                log.Write($"save_fiscal_check\nBP_PrePrice\n{BP_PrePrice}\nBP_PreQuantity\n{BP_PreQuantity}\nBP_PreSum\n{BP_PreSum}\n");
                             }
 
                             if (BP_BillTypeText == "Аванс")
@@ -331,7 +362,8 @@ namespace RemotePump_Driver
 
 
 
-                            if (Driver.SaveReciept(text, BP_DateTime, TID, BP_SerialNum, BP_BillNumber, 0, BP_Sum, (BP_Product == 0), BP_BillTypeText, BP_BillType,
+                            if (Driver.SaveReciept(text, BP_DateTime, TID, BP_SerialNum, BP_BillNumber, 0, BP_Sum, BP_PrePrice, BP_PreQuantity, BP_PreSum,
+                                BP_Price, BP_Quantity, (BP_Product == 0), BP_BillTypeText, BP_BillType,
                                 BP_PayKind, tran_id, BP_Pump, BP_ShiftDocNum, BP_ShiftNum, BP_RNN, BP_Product: BP_Product))
                             {
                                 log.Write("save_fiscal_check ок");
@@ -370,7 +402,8 @@ namespace RemotePump_Driver
                         {
                             try
                             {
-                                MessageBox.Show(Data, TID, MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                                log.Write($"{TID} _ {Data}");
+                                //MessageBox.Show(Data, TID, MessageBoxButtons.OK, MessageBoxIcon.Error, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
                             }
                             catch { }
                         }).Start();

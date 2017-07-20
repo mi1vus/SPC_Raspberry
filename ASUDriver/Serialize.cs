@@ -95,7 +95,8 @@ namespace ProjectSummer.Repository
                     }
                     catch (Exception ex)
                     {
-                        System.Windows.Forms.MessageBox.Show(ex.ToString(), "Serialize");
+                        Console.WriteLine(ex);
+                        //System.Windows.Forms.MessageBox.Show(ex.ToString(), "Serialize");
                     }
                     servBiz = false;
                     return true;
@@ -104,7 +105,8 @@ namespace ProjectSummer.Repository
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show(ex.ToString(), "Serialize");
+                Console.WriteLine(ex);
+                //System.Windows.Forms.MessageBox.Show(ex.ToString(), "Serialize");
             }
             return false;
         }
@@ -137,7 +139,8 @@ namespace ProjectSummer.Repository
             }
             catch(Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show(ex.ToString(), "Deserialize");
+                Console.WriteLine(ex);
+                //System.Windows.Forms.MessageBox.Show(ex.ToString(), "Deserialize");
             }
             return ret;
 

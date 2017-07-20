@@ -42,7 +42,8 @@ namespace SmartPumpControlRemote
             //else if (TID_to_IP.Count > 0)
             //    return TID_to_IP.First().Key;
             //else
-                System.Windows.Forms.MessageBox.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+            Console.WriteLine($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState ? "Online" : "Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}");
+            //System.Windows.Forms.MessageBox.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             return "";
         }
         public static void ShowAllToRun(string TID)
@@ -82,8 +83,9 @@ namespace SmartPumpControlRemote
                     {
                         if (!GetActions(TID).Contains(ActionName))
                         {
-                            if(System.Windows.Forms.MessageBox.Show(string.Format("Действия: \"{0}\" не существует.\r\nВы хотите добавить его?", ActionName), "Добавление действия", System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.No)
-                                return;
+                            Console.WriteLine(string.Format("Действия: \"{0}\" не существует.\r\nВы хотите добавить его?", ActionName));
+                            //if (System.Windows.Forms.MessageBox.Show(string.Format("Действия: \"{0}\" не существует.\r\nВы хотите добавить его?", ActionName), "Добавление действия", System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.No)
+                            //    return;
                             SetAction(ActionName, TID);
                         }
                         else
@@ -96,7 +98,8 @@ namespace SmartPumpControlRemote
                 }
                 catch(Exception ex)
                 {
-                    System.Windows.Forms.MessageBox.Show("Ошибка при выполннии действия: " + ActionName+"\r\n"+ex.ToString());
+                    Console.WriteLine(ex);
+                    //System.Windows.Forms.MessageBox.Show("Ошибка при выполннии действия: " + ActionName+"\r\n"+ex.ToString());
                 }
             }
         }
