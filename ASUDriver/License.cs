@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.NetworkInformation;
 
 namespace ProjectSummer.Repository
 {
@@ -24,6 +25,22 @@ namespace ProjectSummer.Repository
         }
         private static DiskDriveInfoStruct[] DiskDriveInfo;
         public static DiskDriveInfoStruct[] DiskDrivesInfo => GetDiskDriveSerialNumbers();
+
+
+        public static string GetMACAddress()
+        {
+            NetworkInterface[] nics = NetworkInterface.GetAllNetworkInterfaces();
+            String sMacAddress = string.Empty;
+            foreach (NetworkInterface adapter in nics)
+            {
+                if (sMacAddress == String.Empty)// only return MAC Address from first card  
+                {
+                    IPInterfaceProperties properties = adapter.GetIPProperties();
+                    sMacAddress = adapter.GetPhysicalAddress().ToString();
+                }
+            }
+            return sMacAddress;
+        }
 
         /// <summary>
         /// Получение серийных номеров HDD
@@ -59,10 +76,11 @@ namespace ProjectSummer.Repository
             //    }
             //    catch { }
 
-            //}c
+            //}
+            var mac = GetMACAddress();
             //TODO серийник диска
             if (arr.Count < 1)
-                arr.Add(new DiskDriveInfoStruct("None", "None"));
+                arr.Add(new DiskDriveInfoStruct("Mac", mac));
 
             DiskDriveInfo = arr.ToArray();
 

@@ -216,6 +216,7 @@ namespace ASUDriver
         private static byte[] sockHost;
         private static int sockPort;
         private static int sockTerminal;
+        private static string exchangeLogDir = "exchange2.log";
 
         public static int SendTimeout;
         public static int WaitAnswerTimeout;
@@ -302,8 +303,14 @@ namespace ASUDriver
                     //MessageBox.Show($"Disconnected: error code {e.NativeErrorCode}!");
                     //throw new Exception("ERROR Разрыв соединения с попыткой восстановления!");
 
-                    File.AppendAllText("exchange2.log", $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
-
+                    if (!File.Exists(exchangeLogDir))
+                    {
+                        try
+                        {
+                            File.AppendAllText(exchangeLogDir, $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
+                        }
+                        catch { }
+                    }
                     IPHostEntry hostEntry = null;
 
                     IPEndPoint ipe = new IPEndPoint(new IPAddress(bHostB2), iPort);
@@ -358,8 +365,14 @@ namespace ASUDriver
             lock (socket)
                 socket.Send(bytesToSent, bytesToSent.Length, 0);
 
-            File.AppendAllText("exchange2.log", $"\r\n********send*********\r\n{message}");
-
+            if (!File.Exists(exchangeLogDir))
+            {
+                try
+                {
+                    File.AppendAllText(exchangeLogDir, $"\r\n********send*********\r\n{message}");
+                }
+                catch { }
+            }
             Thread.Sleep(timeout);
         }
 
@@ -409,16 +422,16 @@ namespace ASUDriver
         public static void ReceiveMessageSocket()
         {
             StringBuilder builder = new StringBuilder();
-            if (File.Exists("exchange2.log"))
+            if (File.Exists(exchangeLogDir))
             {
                 try
                 {
-                    File.Delete("exchange2.log");
+                    File.Delete(exchangeLogDir);
                 }
                 catch { }
             }
-            //File.WriteAllText("exchange2.log", string.Empty);
-            //File.Delete("exchange2.log");
+            //File.WriteAllText(exchangeLogDir, string.Empty);
+            //File.Delete(exchangeLogDir);
             while (true)
             {
                 try
@@ -444,7 +457,14 @@ namespace ASUDriver
                     if (builder.Length != 0)
                     {
                         var tmp = builder.ToString();
-                        File.AppendAllText("exchange2.log", $"\r\n********recv*********\r\n{tmp}");
+                        if (File.Exists(exchangeLogDir))
+                        {
+                            try
+                            {
+                                File.AppendAllText(exchangeLogDir, $"\r\n********recv*********\r\n{tmp}");
+                            }
+                            catch { }
+                        }
                         string[] ansverStrings = builder.ToString()
                             .Split(new[] {"<?xml version=\"1.0\"?>"}, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var xml in ansverStrings)
@@ -452,11 +472,25 @@ namespace ASUDriver
                             if (isValidXml(xml))
                             {
                                 builder.Remove(0, xml.Length + 21);
-                                File.AppendAllText("exchange2.log", "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
+                                if (File.Exists(exchangeLogDir))
+                                {
+                                    try
+                                    {
+                                        File.AppendAllText(exchangeLogDir, "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
+                                    }
+                                    catch { }
+                                }
                             }
                             else
                             {
-                                File.AppendAllText("exchange2.log", $"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
+                                if (File.Exists(exchangeLogDir))
+                                {
+                                    try
+                                    {
+                                        File.AppendAllText(exchangeLogDir, $"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
+                                    }
+                                    catch { }
+                                }
                                 continue;
                             }
 
@@ -845,9 +879,9 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             SendMessage(pumpRequest1, SendTimeout);
         }
 
-        public static bool Authorize(int TerminalId, int PumpId, long RequestID, int NozzleAllowed, int NozzleNumber, string RNN, int DeliveryLimit, DELIVERY_UNIT DeliveryUnit, int timeout)
+        public static bool Authorize(int TerminalId, int PumpId, long RequestID, int NozzleAllowed, int NozzleNumber, string RNN, int DeliveryLimit, DELIVERY_UNIT DeliveryUnit, int timeout, out string  error)
         {
-            bool next = false;
+            bool next = true;
             List<object> item  = null;
             lock (Statuses)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
@@ -871,20 +905,25 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             }
 
             if (timeout <= 0)
+            {
+                error = "нет ответа на Authorize";
                 return false;
+                
+            }
 
             PumpResponse authorizeResponse = null;
             lock (Statuses)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     authorizeResponse = (PumpResponse)item.Last(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
+            error = authorizeResponse?.PumpObj.PumpStatus.Error;
 
             return authorizeResponse?.PumpObj.PumpStatus.Error == null;
         }
 
         public static OnPumpStatusChange EndFillingEventWait(int PumpId, string rnn)
         {
-            bool next = false;
+            bool next = true;
             List<object> item2 = null;
             object item1 = null;
             //lock (statuses)
@@ -892,7 +931,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             //        item.RemoveAll(t =>t is OnPumpStatusChange);
 
             OnPumpStatusChange оnPumpStatusChanged = null;
-
+            Thread.Sleep(XmlPumpClient.WaitAnswerTimeout);
             //lock (Statuses)
             //{
             //    if (Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange), out item1) && item1 != null)
@@ -907,6 +946,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
 
             do
             {
+                Driver.log.Write($"EndFillingEventWait: [{PumpId}] {rnn}", 0, true);
                 Thread.Sleep(250);
                 //timeout -= 250;
                 lock (Statuses)
@@ -925,7 +965,8 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
                                                ((OnPumpStatusChange) t).StatusObj ==
                                                PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                                && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE
-                               && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION;
+                               && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION
+                               ;
                 }
             } while (next);
             //if (timeout <= 0)
@@ -942,7 +983,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
 
         public static bool Collect(int TerminalId, int PumpId, long RequestID, string RNN, int timeout)
         {
-            bool next = false;
+            bool next = true;
             List<object> item = null;
             lock (Statuses)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))

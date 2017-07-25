@@ -158,7 +158,7 @@ namespace BenzuberServer
 
         private static void Pump_FillingOverEvent(object sender, RemotePump_Driver.RemotePump.FillingOverEventArgs e)
         {
-            log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р");
+            log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
 
             new Task(() =>
             {
@@ -438,7 +438,7 @@ namespace BenzuberServer
                 }
             }
             ).Start();
-            
+            log.Write($"F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0, true);
         }
 
         private int get_int_code(int ex_code) => int.Parse((from code in config.GetValueNames("fuel_code_") where config[code] == ex_code.ToString() select code.Replace("fuel_code_", ""))?.SingleOrDefault()??"-1");
@@ -451,16 +451,17 @@ namespace BenzuberServer
 
                 try
                 {
-                    log.Write("Получение информации о АЗС");
+                    log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0,true);
                     var info = new StationInformaton()
                     {
-                        Fuels = new List<FuelInfo>(from fuel in Driver.Fuels select new FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
+                        Fuels = new List<FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
                     };
 
                     foreach (var fuel in info.Fuels) log.Write($"{fuel.Code}. {fuel.Name} = {fuel.Price:0.00}р");
 
                     List<PumpInfo> pumps = new List<PumpInfo>();
-                    foreach (var p in Driver.Pumps)
+                    var driverPumps = ASUDriver.Driver.Pumps.ToList();
+                    foreach (var p in driverPumps)
                     {
                         var state = pump.GetPumpInformation(p.Value.Pump);
                         log.Write($"{state.ToString()}");
@@ -482,10 +483,10 @@ namespace BenzuberServer
                 {
                     if(ex is FormatException)
                     {
-                        log.Write("Некорректно введена таблица соответствия видов топлива");
+                        log.Write("Некорректно введена таблица соответствия видов топлива",0,true);
                     }
                     else
-                        log.Write("GetStationInfo()r\n" + ex.ToString());
+                        log.Write("GetStationInfo()r\n" + ex.ToString(), 0, true);
                 }
                 return null;
             }

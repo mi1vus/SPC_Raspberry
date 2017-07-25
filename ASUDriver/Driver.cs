@@ -425,20 +425,20 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     $"Liters: {(endMessage?.Liters ?? 0) * 10}\r\n" +
                     $"Money: {endMessage?.Money ?? 0}\r\n");
 
-                int amount = (int) ((endMessage?.Liters ?? 0)/100m*(order.Price*100));
+                int amount = (int) ((endMessage?.Liters ?? 0)*order.Price);
                 int quantity = (endMessage?.Liters ?? 0)*10;
 
                 //TODO Проба со скидками!!!!
                 FillingOver((long)TransCounter, quantity, amount);
                 //FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
 
-                //var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
-                //var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
-                //int allowed = 0;
-                //foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
-                //{
-                //    allowed += 1 << (pumpFuel.Value.ID - 1);
-                //}
+                var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
+                var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
+                int allowed = 0;
+                foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
+                {
+                    allowed += 1 << (pumpFuel.Value.ID - 1);
+                }
                 log.Write(
                     "WaitCollectThread:Collect:\r\n" +
                     $"terminal: {Driver.terminal}\r\n" +
@@ -454,31 +454,33 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     return;
                 }
 
-                ////TODO Проба со скидками!!!!
-                //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
-                //        order.Amount, ((decimal)amount) / 100, discount,
-                //        order.Quantity, ((decimal)quantity) / 1000, PAYMENT_TYPE.Cash,
-                //        order.OrderRRN, order.ProductCode, fuel.Key, (int)(order.Price/*fuel.Value.Price*/ * 100), "", 1);
-                ////XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
-                ////    order.Amount, order.OverAmount, discount,
-                ////    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
-                ////    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
-                //log.Write(
-                //    "WaitCollectThread:SaleDataSale:\r\n" +
-                //    $"terminal: {Driver.terminal}\r\n" +
-                //    $"PumpNo: {order.PumpNo}\r\n" +
-                //    $"allowed: {allowed}\r\n" +
-                //    $"Amount: {order.Amount}\r\n" +
-                //    $"OverAmount: {order.OverAmount}\r\n" +
-                //    $"discount: {discount}\r\n" +
-                //    $"Quantity: {order.Quantity}\r\n" +
-                //    $"OverQuantity: {order.OverQuantity}\r\n" +
-                //    $"PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n" +
-                //    $"OrderRRN: {order.OrderRRN}\r\n" +
-                //    $"ProductCode: {order.ProductCode}\r\n" +
-                //    $"Key: {fuel.Key}\r\n" +
-                //    $"fuelPrice: {(int)(order.Price/*fuel.Value.Price*/ * 100)}\r\n"
-                //    );
+                //TODO Проба со скидками!!!!
+                if (order.PaymentCode == 99)
+                {
+                    XmlPumpClient.SaleDataSale(terminal, order.PumpNo, allowed,
+                        order.Amount, ((decimal)amount) / 100, discount,
+                        order.Quantity, ((decimal)quantity) / 1000, PAYMENT_TYPE.FuelCard,
+                        order.OrderRRN, order.ProductCode, fuel.Key, (int)(order.Price/*fuel.Value.Price*/ * 100), "", 1);
+                    //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
+                    //    order.Amount, order.OverAmount, discount,
+                    //    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
+                    //    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
+                    log.Write(
+                        "WaitCollectThread:SaleDataSale: Benzuber\r\n" +
+                        $"terminal: {terminal}\r\n" +
+                        $"PumpNo: {order.PumpNo}\r\n" +
+                        $"allowed: {allowed}\r\n" +
+                        $"Amount: {order.Amount}\r\n" +
+                        $"OverAmount: {((decimal)amount) / 100}\r\n" +
+                        $"discount: {discount}\r\n" +
+                        $"Quantity: {((decimal)quantity) / 1000}\r\n" +
+                        $"OverQuantity: {order.OverQuantity}\r\n" +
+                        $"PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n" +
+                        $"OrderRRN: {order.OrderRRN}\r\n" +
+                        $"ProductCode: {order.ProductCode}\r\n" +
+                        $"Key: {fuel.Key}\r\n" +
+                        $"fuelPrice: {(int)(order.Price/*fuel.Value.Price*/ * 100)}\r\n"
+                    );
 
                 ////XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
                 ////    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
@@ -497,7 +499,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 //var res2 = XmlPumpClient.Statuses;
                 //var res3 = XmlPumpClient.Fillings;
 
-                //XmlPumpClient.ClearAllTransactionAnswers(order.PumpNo, order.OrderRRN);
+                XmlPumpClient.ClearAllTransactionAnswers(order.PumpNo, order.OrderRRN);
+            }
             }
 
             public static Dictionary<string, FuelInfo> Fuels = new Dictionary<string, FuelInfo>();
@@ -544,9 +547,6 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 catch { }
                 try
                 {
-                    //                    if (ConfigMemory.GetConfigMemory("Benzuber")["enable"] == "true")
-                    //                        BenzuberServer.Excange.StartClient();
-
                     log.Write("");
                     SystemName = _SystemName;
                     log.Write($"Драйвер открыт. Система управления: \"{SystemName ?? "Нет данных"}\"");
@@ -629,20 +629,30 @@ $"Попытка \"{z + 1}\" результат: {result}");
             }
             //static TestWindow window;
 
-            /// <summary>
-            /// Инициализация драйвера
-            /// </summary>
-            /// <param name="_callback_SetDose">Адрес функции установки дозы на ТРК</param>
-            /// <param name="_callback_GetDose">Адрес функции получения информации о ТРК</param>
-            /// <param name="_callback_CancelDose">Адрес функции сброса с ТРК</param>
-            /// <param name="_callback_HoldPump">Адрес функции проверки доступности ТРК</param>
-            /// <param name="_callback_UpdateFillingOver">Адрес функции сохранения информации после пересчата завершенного заказа</param>
-            /// <param name="_callback_InsertCardInfo">Адрес функции сохранения информации о доп. картах клиена</param>
-            /// <param name="_callback_SaveReciept">Адрес функции сохранения информации о напечатанном документе</param>
-            /// <param name="_SystemName">Информация о системе управления АЗС</param>
-            /// <param name="ctx">Произвольныый объект, который будет возвращаться при каждом вызове callback функций</param>
-            /// <returns></returns>
-            [Obfuscation()]
+            public static void StartBenzuber()
+            {
+                if (ConfigMemory.GetConfigMemory("Benzuber")["enable"] == "true")
+                {
+                    BenzuberServer.Excange.StartClient();
+                    log.Write("Стартуем BenzuberServer:", 0, true);
+                }
+                else log.Write("BenzuberServer отключен", 0, true);
+            }
+
+        /// <summary>
+        /// Инициализация драйвера
+        /// </summary>
+        /// <param name="_callback_SetDose">Адрес функции установки дозы на ТРК</param>
+        /// <param name="_callback_GetDose">Адрес функции получения информации о ТРК</param>
+        /// <param name="_callback_CancelDose">Адрес функции сброса с ТРК</param>
+        /// <param name="_callback_HoldPump">Адрес функции проверки доступности ТРК</param>
+        /// <param name="_callback_UpdateFillingOver">Адрес функции сохранения информации после пересчата завершенного заказа</param>
+        /// <param name="_callback_InsertCardInfo">Адрес функции сохранения информации о доп. картах клиена</param>
+        /// <param name="_callback_SaveReciept">Адрес функции сохранения информации о напечатанном документе</param>
+        /// <param name="_SystemName">Информация о системе управления АЗС</param>
+        /// <param name="ctx">Произвольныый объект, который будет возвращаться при каждом вызове callback функций</param>
+        /// <returns></returns>
+        [Obfuscation()]
             public static byte Open(SetDose_Delegate _callback_SetDose,
                                       GetDose_Delegate _callback_GetDose,
                                       CancelDose_Delegate _callback_CancelDose,
@@ -825,7 +835,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
             public static void FuelPrices()
             {
                 log.Write("");
-                log.Write("Установка цен: " + Fuels);
+                log.Write("Установка цен: " + Fuels, 0, true);
                 //lock(XmlPumpClient.answers)
                 try
                 {
@@ -850,7 +860,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         foreach (var price in ((OnSetGradePrices)item).GradePrices)
                         {
                             var tmp = new FuelInfo() { ID = price.GradeId, Name = price.GradeName, Price = (decimal)price.Price / 100, InternalCode = price.GradeId };
-                            log.Write("Add Fuel: " + tmp.ToString());
+                            log.Write("Add Fuel: " + tmp.ToString(), 0, true);
                             Driver.Fuels.Add(price.GradeName, tmp);
                         }
                     }
@@ -968,7 +978,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
             {
                 //"1=95.92.80;2=95.92.80;3=95.92;4=95.92"
                 log.Write("");
-                log.Write("Установка продуктов, доступных на ТРК.");
+                log.Write("Установка продуктов, доступных на ТРК.",0,true);
                 //lock (XmlPumpClient.answers)
                 try
                 {
@@ -1011,7 +1021,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                                     continue;
 
                                 var fuel = Fuels.First(t => t.Value.ID == nozzle.GradeId);
-                                log.Write($"\tПродукт: {fuel.Key}\r\n");
+                                log.Write($"\tПродукт: {fuel.Key}\r\n", 0, true);
                                 Pumps[pump.PumpId].Fuels.Add(fuel.Key, fuel.Value);
                             }
                         }

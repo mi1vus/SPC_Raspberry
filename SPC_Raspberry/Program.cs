@@ -9,11 +9,11 @@ namespace SPC_Raspberry
 {
     static class Program
     {
-        public static void log(string txt)
+        public static void log(string txt, bool toConsole)
         {
                 //Logger.Text += txt;
                 //Driver.log.Write(txt);
-                Driver.log.Write(txt,0,true);
+                Driver.log.Write(txt,0, toConsole);
             //Console.WriteLine($"{DateTime.Now.ToString("u")} - {txt}");
             //return;
             //string path = @"app_log.log";
@@ -42,7 +42,7 @@ namespace SPC_Raspberry
                     {
                         ++Driver.TransCounter;
                         log("Установка дозы на ТРК: " + Order.PumpNo + " , сгенерирован TransID: " +
-                            Driver.TransCounter + "\r\n");
+                            Driver.TransCounter + "\r\n", true);
 
                             //var prePaid = Order.Price*Order.Quantity;
                             var discount = 0;//100;//(Order.BasePrice - Order.Price)*Order.Quantity;
@@ -76,7 +76,22 @@ namespace SPC_Raspberry
                             $"рнн:{Order.OrderRRN}\r\n" +
                             $"продукт код:{Order.ProductCode}\r\n" +
                             $"продукт{fuel.Key}\r\n" +
-                            $"продукт цена коп:{(int)(Order.Price/*fuel.Value.Price*/ * 100)}\r\n");
+                            $"продукт цена коп:{(int)(Order.Price/*fuel.Value.Price*/ * 100)}\r\n", true);
+
+                        //TODO Проба со скидками!!!!
+                        string errMsg = "";
+                        if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
+                            allowed, Order.ProductCode, Order.OrderRRN, (int)(Order.Quantity * 100), DELIVERY_UNIT.Volume,/*(int) (Order.Amount*100), DELIVERY_UNIT.Money,*/
+                            XmlPumpClient.WaitAnswerTimeout, out errMsg))
+                        //if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
+                        //    allowed, Order.ProductCode, Order.OrderRRN, (int) (Order.Amount*100), DELIVERY_UNIT.Money,
+                        //    XmlPumpClient.WaitAnswerTimeout))
+                        {
+                            log($"SetDoseCallback:Authorize: {errMsg}\r\n", true);
+                            return -1;
+                        }
+
+
                         //TODO Проба со скидками!!!!
                         if (!XmlPumpClient.Presale(Driver.terminal, Order.PumpNo, allowed, Order.Amount,
                             discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode),
@@ -87,29 +102,19 @@ namespace SPC_Raspberry
                         //    Order.OrderRRN, Order.ProductCode, fuel.Key,
                         //    (int)(fuel.Value.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
                         {
-                            log("SetDoseCallback:Presale: нет о твета на Presale\r\n");
-                            return -1;
-                        }
-                        //TODO Проба со скидками!!!!
-                        if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
-                            allowed, Order.ProductCode, Order.OrderRRN, (int)(Order.Quantity * 100), DELIVERY_UNIT.Volume,/*(int) (Order.Amount*100), DELIVERY_UNIT.Money,*/
-                            XmlPumpClient.WaitAnswerTimeout))
-                        //if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
-                        //    allowed, Order.ProductCode, Order.OrderRRN, (int) (Order.Amount*100), DELIVERY_UNIT.Money,
-                        //    XmlPumpClient.WaitAnswerTimeout))
-                        {
-                            log("SetDoseCallback:Authorize: нет ответа на Authorize\r\n");
+                            log("SetDoseCallback:Presale: нет о твета на Presale\r\n", true);
                             return -1;
                         }
 
-                        log("налив разрешен\r\n");
+
+                        log("налив разрешен\r\n", true);
 
                             //lock (Driver.TransMemory)
                             //{
                             //    Driver.TransMemory[(long) Driver.TransCounter] = Order;
                             //}
 
-                            Thread myThread2 = new Thread(Driver.WaitCollectThread);
+                        Thread myThread2 = new Thread(Driver.WaitCollectThread);
                         myThread2.Start(Driver.TransCounter); // запускаем поток
 
                             //XmlPumpClient.PumpRequestAuthorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
@@ -134,7 +139,7 @@ namespace SPC_Raspberry
                     {
                         Driver.GetPumpStateResponce resp;
 
-                        log("Запрос состояние ТРК: " + Pump + "\r\n");
+                        log("Запрос состояние ТРК: " + Pump + "\r\n", false);
 
                             //DispStatus:
                             //	0 - ТРК онлайн(при этом TransID должен = -1, иначе данный статус воспринимается как 3)
@@ -147,11 +152,12 @@ namespace SPC_Raspberry
                         XmlPumpClient.PumpGetStatus(Driver.terminal, (int)Pump, 1);
                             //lock (XmlPumpClient.answers)
                             //    оnPumpStatusChanged = (OnPumpStatusChange)XmlPumpClient.answers.LastOrDefault(t => t is OnPumpStatusChange && (t as OnPumpStatusChange).PumpNo == Pump);
-                            lock (XmlPumpClient.Statuses)
+                        lock (XmlPumpClient.Statuses)
                             if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>((int)Pump,
                                 MESSAGE_TYPES.OnPumpStatusChange), out item) && item != null)
                                 оnPumpStatusChanged = (OnPumpStatusChange)item;
 
+                        var е = XmlPumpClient.Fillings;
                         if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                         {
                             Thread myThread2 = new Thread(Driver.CollectOldOrderThread);
@@ -174,7 +180,7 @@ namespace SPC_Raspberry
                         || оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING) ? 3 : 10;
                         Driver.Pumps[(int)Pump] = pmp;
 
-                        log($"Статус: {(byte)pmp.DispStatus}; UpNozz: {(byte)((оnPumpStatusChanged?.Grade ?? -2) + 1)}\r\n");
+                        log($"Статус ТРК [{Pump}]: { (byte)pmp.DispStatus}; UpNozz: {(byte)((оnPumpStatusChanged?.Grade ?? -2) + 1)}\r\n", true);
 
                         resp.DispStatus = (byte)pmp.DispStatus;
                             // StateFlags - всегда 0
@@ -223,7 +229,7 @@ namespace SPC_Raspberry
                     //Отмена транзакции
                     (long TransID, IntPtr ctx) =>
                     {
-                        log("Отмена транзакции: TransactID: " + TransID + "\r\n");
+                        log("Отмена транзакции: TransactID: " + TransID + "\r\n", true);
 
                             //Driver.VolumeMem = 0;
                             //Driver.AmountMem = 0;
@@ -251,7 +257,7 @@ namespace SPC_Raspberry
                         if (cnt <= 0)
                         {
                             log(
-                                        $"\t\tERROR!!! CancelDoseDelegate:\r\n\t\tне найден заказ №{(long)TransID}\r\n");
+                                        $"\t\tERROR!!! CancelDoseDelegate:\r\n\t\tне найден заказ №{(long)TransID}\r\n", true);
                             return -1;
                         }
 
@@ -276,7 +282,7 @@ namespace SPC_Raspberry
                             if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_AUTHORIZED)
                         {
                             log(
-                                       $"\t\tCancelDoseDelegate:\r\n\t\tPumpStop №{(long)TransID} pmp:{order.PumpNo}\r\n");
+                                       $"\t\tCancelDoseDelegate:\r\n\t\tPumpStop №{(long)TransID} pmp:{order.PumpNo}\r\n", true);
                             XmlPumpClient.PumpStop(Driver.terminal, order.PumpNo, 1);
 
                                 //Thread.Sleep(1000);
@@ -327,7 +333,7 @@ namespace SPC_Raspberry
 
                             //}
 
-                            log("Налив успешно завершен" + "\r\n");
+                            log("Налив успешно завершен" + "\r\n", true);
 
                             //Driver.PriceMem = 0;
                             return 1;
@@ -340,7 +346,7 @@ namespace SPC_Raspberry
                         {
                             if (ReleasePump == 0)
                             {
-                                log("Захват ТРК: " + PumpId + "\r\n");
+                                log("Захват ТРК: " + PumpId + "\r\n", true);
 
 
                                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
@@ -360,7 +366,7 @@ namespace SPC_Raspberry
                             }
                             else
                             {
-                                log("Освобождение ТРК: " + PumpId + "\r\n");
+                                log("Освобождение ТРК: " + PumpId + "\r\n", true);
 
                                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                                     MESSAGE_TYPES.OnDataInit), out item) || item == null)
@@ -386,7 +392,7 @@ namespace SPC_Raspberry
                         + "Новая цена:   " + (float)Price / 100 + "\r\n"
                         + "Новая сумма:  " + (float)Amount / 100 + "\r\n"
                         + "Новая скидка: " + (float)DiscountMoney / 100 + "\r\n"
-                        + "\r\n");
+                        + "\r\n", true);
 
                             //++Driver.TransCounter;
 
@@ -443,7 +449,7 @@ namespace SPC_Raspberry
                         + "Дата/Время транзакции: " + _DateTime + "\r\n"
                         + "Номер карты:           " + CardNo + "\r\n"
                         + "Тип карты:             " + CardType + "\r\n"
-                        + "\r\n");
+                        + "\r\n", true);
 
                             //label1.Text += "Сохранение информации о доп карте, TransID: " + Trans_ID + "\r\n"
                             //+ "Дата/Время транзакции: " + time.wYear + "-" + time.wMonth + "-" + time.wDay + " " + time.wHour + ":" + time.wMinute + ":" + time.wSecond + "\r\n"
@@ -488,7 +494,7 @@ namespace SPC_Raspberry
                             + "\r\nОбраз Чека:         "
                             + "\r\n" + RecieptText
                             + "\r\n------------------------------------------------------"
-                            + "\r\n");
+                            + "\r\n", true);
 
                             ++Driver.TransCounter;
 
@@ -526,7 +532,7 @@ namespace SPC_Raspberry
                                 $"OrderRRN: {OrderRRN.PadLeft(20, '0')}\r\n" +
                                 $"ProductCode: {BP_Product}\r\n" +
                                 $"Key: {fuel.Key}\r\n" +
-                                $"fuelPrice: {(int)(Price/*fuel.Value.Price*/ * 100)}\r\n"
+                                $"fuelPrice: {(int)(Price/*fuel.Value.Price*/ * 100)}\r\n", true
                                 );
 
                             //XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
@@ -540,7 +546,7 @@ namespace SPC_Raspberry
                             //    $"OrderRRN: {order.OrderRRN}\r\n");
 
                             XmlPumpClient.Init(Driver.terminal, PumpNo, -PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
-                            log("изм. статуса\r\n");
+                            log("изм. статуса\r\n", true);
 
                             //var res = XmlPumpClient.answers;
                             var res2 = XmlPumpClient.Statuses;
@@ -556,7 +562,7 @@ namespace SPC_Raspberry
                                 $"GetDocNum: {DocNo}\r\n" +
                                 $"GetShiftNum: {ShiftNum}\r\n" +
                                 $"OverAmount: {summ}\r\n" +
-                                $"OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n");
+                                $"OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", true);
 
                             //DebithThread.SetTransID(Driver.TransCounter);
 
@@ -565,7 +571,7 @@ namespace SPC_Raspberry
                     "Sample Control", IntPtr.Zero/*ctxSrc*/) != 1
                 )
                 {
-                    log("Ошибка подключения драйвера" + "\r\n");
+                    log("Ошибка подключения драйвера" + "\r\n", true);
                     return;
                 }
                 //else
@@ -585,21 +591,23 @@ namespace SPC_Raspberry
                 //else
                 //    Driver.PumpFuels("1=95.92.80;2=95.92.80;3=95.92;4=95.92");
 
+                Driver.StartBenzuber();
+
                 object res;
                 if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit), out res))
                 {
                     log(
-                        Driver.Description() + " успешно открыта!\r\n");
+                        Driver.Description() + " успешно открыта!\r\n", true);
                 }
                 else
                 {
                     log(
-                        Driver.Description() + " нет ответа от АСУ!\r\n");
+                        Driver.Description() + " нет ответа от АСУ!\r\n", true);
                 }
             }
             catch (Exception ex)
             {
-                log($"Ошибка инициализации библиотеки {Driver.Description()}:{ex}\r\n");
+                log($"Ошибка инициализации библиотеки {Driver.Description()}:{ex}\r\n", true);
             }
         }
 
@@ -614,23 +622,24 @@ namespace SPC_Raspberry
                 allowed += 1 << (pumpFuel.Value.ID - 1);
             }
             ASUDriver.XmlPumpClient.Init(terminal, pump, pump, XmlPumpClient.WaitAnswerTimeout, 1);
-            log("занять колонку\r\n");
+            log("занять колонку\r\n", true);
             if (!XmlPumpClient.Presale(terminal, pump, allowed, price, 0, price / fuel.Value.Price, PAYMENT_TYPE.Cash, "qwertyuiop" + initNum, product, "АИ-92", (int)(fuel.Value.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
                 return;
-            log("предоплата\r\n");
-            
-            if (!XmlPumpClient.Authorize(terminal, pump, 10, allowed, nozzle, "qwertyuiop" + initNum, (int)(price * 100), DELIVERY_UNIT.Money, XmlPumpClient.WaitAnswerTimeout))
+            log("предоплата\r\n", true);
+
+            string errMsg = "";
+            if (!XmlPumpClient.Authorize(terminal, pump, 10, allowed, nozzle, "qwertyuiop" + initNum, (int)(price * 100), DELIVERY_UNIT.Money, XmlPumpClient.WaitAnswerTimeout, out errMsg))
                 return;
-            log("разрешить налив\r\n");
+            log("разрешить налив\r\n", true);
             
             var endMessage = XmlPumpClient.EndFillingEventWait(pump, "qwertyuiop" + initNum);
             
             if (!XmlPumpClient.Collect(terminal, pump, 10, "qwertyuiop" + initNum, XmlPumpClient.WaitAnswerTimeout))
                 return;
-            log("освобождение колонки\r\n");
+            log("освобождение колонки\r\n", true);
             XmlPumpClient.SaleDataSale(terminal, pump, allowed, price, (endMessage == null ? 0 : (decimal)endMessage.Money) / 100, 0, price / fuel.Value.Price, (endMessage == null ? 0 : (decimal)endMessage.Liters) / 100, PAYMENT_TYPE.Cash, "qwertyuiop" + initNum, product, "АИ-92", (int)(fuel.Value.Price * 100), "", 1);
             Thread.Sleep(3000);
-            log("фактические данные заправки\r\n");
+            log("фактические данные заправки\r\n", true);
             XmlPumpClient.FiscalEventReceipt(Driver.terminal, pump,
             1350 + initNum, 65 + initNum, 6,//GetShiftDocNum(), GetDocNum(), GetShiftNum(),
             price, 0, PAYMENT_TYPE.Cash, "qwertyuiop" + initNum, 1);
@@ -638,15 +647,15 @@ namespace SPC_Raspberry
             $"GetShiftDocNum: {1350 + initNum}\r\n" +
             $"GetDocNum: {65 + initNum}\r\n" +
             $"GetShiftNum: {6}\r\n" +
-            $"OverAmount: {price}\r\n");
+            $"OverAmount: {price}\r\n", true);
             XmlPumpClient.Init(terminal, pump, -pump, XmlPumpClient.WaitAnswerTimeout, 1);
-            log("изм. статуса\r\n");
+            log("изм. статуса\r\n", true);
             
             var res2 = XmlPumpClient.Statuses;
             var res3 = XmlPumpClient.Fillings;
             
             XmlPumpClient.ClearAllTransactionAnswers(pump, "qwertyuiop" + initNum);
-            log("\r\n");
+            log("\r\n", true);
         }
 
         /// <summary>
