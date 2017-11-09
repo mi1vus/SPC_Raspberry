@@ -593,9 +593,9 @@ namespace RemotePump_Driver
             foreach (var fuel in fuels)
             {
                 prodInfo.Add(new ProductInformation() { Name = fuel.Value.Name, BasePrice = fuel.Value.Price, Code = fuel.Value.ID });
-            //    log.Write("Products:"+ fuel.Value.ToString());
+                log.Write("Products:"+ fuel.Value.ToString());
             }
-          //  log.Write($"pump_status.DispStatus: {pump_status.DispStatus}");
+            log.Write($"pump_status.DispStatus: {pump_status.DispStatus}");
 
             ret.No = No;
             ret.SelectedProduct = pump_status.UpFuel;
@@ -647,7 +647,7 @@ namespace RemotePump_Driver
             {
                 pumpInformationMem[No] = new PumpMemory() { Value = ret, LastUpdate = DateTime.Now };
             }
-            //log.WriteFormated(" ret.ProductInformation.Length: {0}", ret.ProductInformation.Length);
+            log.WriteFormated(" ret.ProductInformation.Length: {0}", ret.ProductInformation.Length);
             return ret;
         }
     }

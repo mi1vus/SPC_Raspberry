@@ -322,6 +322,7 @@ namespace ProjectSummer.Repository
             this.NameValueSeparator = NameValueSeparator;
 
             FileName = Path.GetFullPath(Path.Combine(ConfigDirectory, this.ModuleName + ".conf"));
+            Console.WriteLine(FileName);
             values = initFromFile(FileName);
 
             ModuleNameDescription = values.ContainsKey("#name_description") ? string.Format("{0} [{1}]", values["#name_description"], this.ModuleName) : this.ModuleName;

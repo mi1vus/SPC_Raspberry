@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -381,7 +382,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 }
             }
 
-            public static void WaitCollectThread(object TransCounter)
+            public static void WaitCollect(object TransCounter)
             {
                 OrderInfo order = new OrderInfo();
 
@@ -408,6 +409,48 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     return;
                 }
 
+                WaitCollectThread(order);
+            }
+            public static void WaitCollectBenzuber(object TransactionID)
+            {
+                OrderInfo order = new OrderInfo();
+                Benzuber.ExcangeServer.Request request = new Benzuber.ExcangeServer.Request();
+
+                int cnt = 2;
+                while (cnt > 0)
+                {
+                    lock (Benzuber.ExcangeServer.trans)
+                    {
+                        if (Benzuber.ExcangeServer.trans.TryGetValue((string)TransactionID, out request))
+                        {
+                            order.PumpNo = request.Pump.Value;
+                            order.OrderRRN = request.TransactionID;
+                            order.ProductCode = request.Fuel.Value;
+                            order.PaymentCode = 99;
+                            order.Amount = request.Amount.Value;
+                            order.Price = Driver.Fuels.First(t => t.Value.ID == request.Fuel.Value).Value.Price;
+                            order.Quantity = order.Amount/order.Price;
+
+                            break;
+                        }
+                        else
+                            --cnt;
+                    }
+                    if (cnt > 0)
+                        Thread.Sleep(500);
+                }
+
+                if (cnt <= 0)
+                {
+                    log.Write(
+                                $"\t\tERROR!!! WaitCollectThreadBenzuber:\r\n\t\tне найден транзакция №{(string)TransactionID}\r\n");
+                    return;
+                }
+                WaitCollectThread(order);
+            }
+
+            private static void WaitCollectThread(OrderInfo order)
+            {
                 var endMessage = XmlPumpClient.EndFillingEventWait(order.PumpNo, order.OrderRRN);
 
                 if (endMessage == null)
@@ -430,6 +473,13 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                 //TODO Проба со скидками!!!!
                 FillingOver((long)TransCounter, quantity, amount);
+                Benzuber.ExcangeServer.transOver.Add(order.OrderRRN, new Benzuber.ExcangeServer.Request
+                {
+                    TransactionID = order.OrderRRN,
+                    Amount = amount / 100M,
+                    Fuel = order.ProductCode,
+                    Pump = endMessage?.PumpNo
+                });
                 //FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
 
                 var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
@@ -506,7 +556,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
             public static Dictionary<string, FuelInfo> Fuels = new Dictionary<string, FuelInfo>();
 
             public static Dictionary<int, PumpInfo> Pumps = new Dictionary<int, PumpInfo>();
-            static bool isInit = false;
+            public static bool isInit = false;
             #endregion
             public static string SystemName { get; private set; } = "Unknown";
 
@@ -583,7 +633,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                     try
                     {
-                        Params = Serialization.Deserialize<Serialization.SerializableDictionary<string, string>>("Config/SmartPumpControlParams.xml");
+                        Params = Serialization.Deserialize<Serialization.SerializableDictionary<string, string>>(Path.Combine("config", "SmartPumpControlParams.xml"));
                     }
                     catch
                     {
@@ -633,7 +683,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
             {
                 if (ConfigMemory.GetConfigMemory("Benzuber")["enable"] == "true")
                 {
-                    BenzuberServer.Excange.StartClient();
+                    ASUDriver.Benzuber.ExcangeServer.StartClient();
+                    //Excange.StartClient();
                     log.Write("Стартуем BenzuberServer:", 0, true);
                 }
                 else log.Write("BenzuberServer отключен", 0, true);

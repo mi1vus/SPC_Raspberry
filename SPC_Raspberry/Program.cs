@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using ASUDriver;
 using RemotePump_Driver;
+
+//using ASUDriver;
+//using RemotePump_Driver;
 
 namespace SPC_Raspberry
 {
@@ -114,7 +116,7 @@ namespace SPC_Raspberry
                             //    Driver.TransMemory[(long) Driver.TransCounter] = Order;
                             //}
 
-                        Thread myThread2 = new Thread(Driver.WaitCollectThread);
+                        Thread myThread2 = new Thread(Driver.WaitCollect);
                         myThread2.Start(Driver.TransCounter); // запускаем поток
 
                             //XmlPumpClient.PumpRequestAuthorize(Driver.terminal, Order.PumpNo, Driver.TransCounter,
@@ -137,8 +139,6 @@ namespace SPC_Raspberry
                     //Запрос состояние ТРК
                     (long Pump, IntPtr ctx) =>
                     {
-                        Driver.GetPumpStateResponce resp;
-
                         log("Запрос состояние ТРК: " + Pump + "\r\n", false);
 
                             //DispStatus:
@@ -182,49 +182,55 @@ namespace SPC_Raspberry
 
                         log($"Статус ТРК [{Pump}]: { (byte)pmp.DispStatus}; UpNozz: {(byte)((оnPumpStatusChanged?.Grade ?? -2) + 1)}\r\n", true);
 
-                        resp.DispStatus = (byte)pmp.DispStatus;
-                            // StateFlags - всегда 0
-                            resp.StateFlags = 0;
-                            // ErrorCode - код ошибки
-                            resp.ErrorCode = 0;
-                            // DispMode - всегда 0
-                            resp.DispMode = 0;
-                            // UpNozz - номер снятого пистолета, не обязательный параметр для заполнения
-                            // допускается 0
-                            resp.UpNozz = (byte)((оnPumpStatusChanged?.Grade ?? -2) + 1);
-                            // UpFuel - продукт снятого пистолета
-                            resp.UpFuel = 0;
-                            // UpTank - Номер емкости, к которой привязан снятый пистолет
-                            //не обязательный параметр для заполнения допускается 0
-                            resp.UpTank = 0;
-                            // TransID - Номер транзакции
-                            // в случае, если на ТРК отсутствует заказ: '-1'
-                            resp.TransID = -1;
-                            //PreselMode - режим заказа установленного на ТРК
-                            //0 - литровый заказ
-                            //1 - денежный заказ
-                            resp.PreselMode = 0;
-                            //PreselDose - сумма заказа установленного на ТРК,
-                            //  в случае 'PreselMode = 0' - кол-во литров
-                            //  в случае 'PreselMode = 1' - сумма в рублях
-                            resp.PreselDose = 0;
-                            //PreselDose - цена за лит топлива для заказа установленного на ТРК
-                            resp.PreselPice = 0;
-                            //PreselFuel - продукт заказа установленного на ТРК,
-                            resp.PreselFuel = 0;
-                            //PreselFullTank - если True, на ТРК установлен заказ до полного бака
-                            resp.PreselFullTank = 0;
-                            //FillingVolume - данные дисплея ТРК кол-во.
-                            resp.FillingVolume = 0;
-                            //FillingVolume - данные дисплея ТРК цена.
-                            resp.FillingPrice = 0;
-                            //FillingVolume - данные дисплея ТРК сумма.
-                            resp.FillingSum = 0;
+                        /*                        Driver.GetPumpStateResponce resp;
 
-                        IntPtr respPtr = Marshal.AllocCoTaskMem(Marshal.SizeOf(resp));
-                        Marshal.StructureToPtr(resp, respPtr, false);
+                                                resp.DispStatus = (byte)pmp.DispStatus;
+                                                    // StateFlags - всегда 0
+                                                    resp.StateFlags = 0;
+                                                    // ErrorCode - код ошибки
+                                                    resp.ErrorCode = 0;
+                                                    // DispMode - всегда 0
+                                                    resp.DispMode = 0;
+                                                    // UpNozz - номер снятого пистолета, не обязательный параметр для заполнения
+                                                    // допускается 0
+                                                    resp.UpNozz = (byte)((оnPumpStatusChanged?.Grade ?? -2) + 1);
+                                                    // UpFuel - продукт снятого пистолета
+                                                    resp.UpFuel = 0;
+                                                    // UpTank - Номер емкости, к которой привязан снятый пистолет
+                                                    //не обязательный параметр для заполнения допускается 0
+                                                    resp.UpTank = 0;
+                                                    // TransID - Номер транзакции
+                                                    // в случае, если на ТРК отсутствует заказ: '-1'
+                                                    resp.TransID = -1;
+                                                    //PreselMode - режим заказа установленного на ТРК
+                                                    //0 - литровый заказ
+                                                    //1 - денежный заказ
+                                                    resp.PreselMode = 0;
+                                                    //PreselDose - сумма заказа установленного на ТРК,
+                                                    //  в случае 'PreselMode = 0' - кол-во литров
+                                                    //  в случае 'PreselMode = 1' - сумма в рублях
+                                                    resp.PreselDose = 0;
+                                                    //PreselDose - цена за лит топлива для заказа установленного на ТРК
+                                                    resp.PreselPice = 0;
+                                                    //PreselFuel - продукт заказа установленного на ТРК,
+                                                    resp.PreselFuel = 0;
+                                                    //PreselFullTank - если True, на ТРК установлен заказ до полного бака
+                                                    resp.PreselFullTank = 0;
+                                                    //FillingVolume - данные дисплея ТРК кол-во.
+                                                    resp.FillingVolume = 0;
+                                                    //FillingVolume - данные дисплея ТРК цена.
+                                                    resp.FillingPrice = 0;
+                                                    //FillingVolume - данные дисплея ТРК сумма.
+                                                    resp.FillingSum = 0;
 
-                        return resp;
+                                                IntPtr respPtr = Marshal.AllocCoTaskMem(Marshal.SizeOf(resp));
+                                                Marshal.StructureToPtr(resp, respPtr, false);
+
+                                                log("return", false);
+
+                                                return resp;
+                        */
+                        return new Driver.GetPumpStateResponce();
                     },
                     //Отмена транзакции
                     (long TransID, IntPtr ctx) =>
@@ -459,115 +465,115 @@ namespace SPC_Raspberry
                             //+ "\r\n";
                             return 1;
                     },
-                        //Сохранение документа SaveReciept_Delegate
-                        ///  DocType 0 - фискальные 1 - нефискальные 2 - отчет
-                        (string RecieptText, long _DateTime, string DeviceName, string DeviceSerial,
-                                int DocNo, int DocType, int Amount, decimal PrePrice,
-                                decimal PreQuantity,decimal PreSum,decimal Price,decimal Quantity,
-                                int VarCheck, string DocKind, int DocKindCode,
-                                int PayType, int FactDoc, int BP_Product, long Trans_ID,
-                                int PumpNo, int ShiftDocNum, int ShiftNum, string OrderRRN, IntPtr ctx) =>
-                        {
-                            //SYSTEMTIME time;
-                            //VariantTimeToSystemTime(_DateTime, &time);
-                            var summ = (DocKindCode != 4) ? (decimal)Amount / 100 : -(decimal)Amount / 100;
+                    //Сохранение документа SaveReciept_Delegate
+                    ///  DocType 0 - фискальные 1 - нефискальные 2 - отчет
+                    (string RecieptText, long _DateTime, string DeviceName, string DeviceSerial,
+                            int DocNo, int DocType, int Amount, decimal PrePrice,
+                            decimal PreQuantity,decimal PreSum,decimal Price,decimal Quantity,
+                            int VarCheck, string DocKind, int DocKindCode,
+                            int PayType, int FactDoc, int BP_Product, long Trans_ID,
+                            int PumpNo, int ShiftDocNum, int ShiftNum, string OrderRRN, IntPtr ctx) =>
+                    {
+                        //SYSTEMTIME time;
+                        //VariantTimeToSystemTime(_DateTime, &time);
+                        var summ = (DocKindCode != 4) ? (decimal)Amount / 100 : -(decimal)Amount / 100;
 
-                            log("Сохранение документа, TransID: " + Trans_ID
-                            + "\r\nДата/время:         " + _DateTime//time.wYear + "-" + time.wMonth + "-" + time.wDay + " " + time.wHour + ":" + time.wMinute + ":" + time.wSecond
-                            + "\r\nИмя устройства:     " + DeviceName
-                            + "\r\nСерийный номер:     " + DeviceSerial
-                            + "\r\nНомер документа:    " + DocNo
-                            + "\r\nТип документа:      " + DocType
-                            + "\r\nСумма:              " + summ
-                            + "\r\nПроизвольный чек:   " + VarCheck
-                            + "\r\nВид документа:      " + DocKind
-                            + "\r\nКод вида документа: " + DocKindCode
-                            + "\r\nТип оплаты:         " + PayType
-                            + "\r\nЧек по факту:       " + FactDoc
-                            + "\r\nНомер продукта:     " + BP_Product
-                            + "\r\nID Транзакции:      " + Trans_ID
-                            + "\r\nID PumpNo:          " + PumpNo
-                            + "\r\nID ShiftDocNum:     " + ShiftDocNum
-                            + "\r\nID ShiftNum:        " + ShiftNum
-                            + "\r\nID OrderRRN:        " + OrderRRN.PadLeft(20, '0')
-                            + "\r\n------------------------------------------------------"
-                            + "\r\nОбраз Чека:         "
-                            + "\r\n" + RecieptText
-                            + "\r\n------------------------------------------------------"
-                            + "\r\n", true);
+                        log("Сохранение документа, TransID: " + Trans_ID
+                        + "\r\nДата/время:         " + _DateTime//time.wYear + "-" + time.wMonth + "-" + time.wDay + " " + time.wHour + ":" + time.wMinute + ":" + time.wSecond
+                        + "\r\nИмя устройства:     " + DeviceName
+                        + "\r\nСерийный номер:     " + DeviceSerial
+                        + "\r\nНомер документа:    " + DocNo
+                        + "\r\nТип документа:      " + DocType
+                        + "\r\nСумма:              " + summ
+                        + "\r\nПроизвольный чек:   " + VarCheck
+                        + "\r\nВид документа:      " + DocKind
+                        + "\r\nКод вида документа: " + DocKindCode
+                        + "\r\nТип оплаты:         " + PayType
+                        + "\r\nЧек по факту:       " + FactDoc
+                        + "\r\nНомер продукта:     " + BP_Product
+                        + "\r\nID Транзакции:      " + Trans_ID
+                        + "\r\nID PumpNo:          " + PumpNo
+                        + "\r\nID ShiftDocNum:     " + ShiftDocNum
+                        + "\r\nID ShiftNum:        " + ShiftNum
+                        + "\r\nID OrderRRN:        " + OrderRRN.PadLeft(20, '0')
+                        + "\r\n------------------------------------------------------"
+                        + "\r\nОбраз Чека:         "
+                        + "\r\n" + RecieptText
+                        + "\r\n------------------------------------------------------"
+                        + "\r\n", true);
 
-                            ++Driver.TransCounter;
+                        ++Driver.TransCounter;
 
-                            if (DocType != 0 || PumpNo <= 0)
-                                return 1;
-
-                            var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
-                            var fuel = Driver.Fuels.First(t => t.Value.ID == BP_Product);
-                            int allowed = 0;
-                            foreach (var pumpFuel in Driver.Pumps[PumpNo].Fuels)
-                            {
-                                allowed += 1 << (pumpFuel.Value.ID - 1);
-                            }
-
-                            //TODO Проба со скидками!!!!
-                            XmlPumpClient.SaleDataSale(Driver.terminal, PumpNo, allowed,
-                                    PreSum, summ, discount,
-                                    PreQuantity, Quantity, PAYMENT_TYPE.Cash,
-                                    OrderRRN.PadLeft(20, '0'), BP_Product, fuel.Key, (int)(Price/*fuel.Value.Price*/ * 100), "", 1);
-                            //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
-                            //    order.Amount, order.OverAmount, discount,
-                            //    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
-                            //    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
-                            log(
-                                "WaitCollectThread:SaleDataSale:\r\n" +
-                                $"terminal: {Driver.terminal}\r\n" +
-                                $"PumpNo: {PumpNo}\r\n" +
-                                $"allowed: {allowed}\r\n" +
-                                $"Amount: {PreSum}\r\n" +
-                                $"OverAmount: {summ}\r\n" +
-                                $"discount: {discount}\r\n" +
-                                $"Quantity: {PreQuantity}\r\n" +
-                                $"OverQuantity: {Quantity}\r\n" +
-                                $"PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n" +
-                                $"OrderRRN: {OrderRRN.PadLeft(20, '0')}\r\n" +
-                                $"ProductCode: {BP_Product}\r\n" +
-                                $"Key: {fuel.Key}\r\n" +
-                                $"fuelPrice: {(int)(Price/*fuel.Value.Price*/ * 100)}\r\n", true
-                                );
-
-                            //XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
-                            //    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
-                            //    (endMessage?.Money ?? 0) / 100m, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
-                            //log.Write($"чек:\r\n" +
-                            //    $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
-                            //    $"GetDocNum: {GetDocNum()}\r\n" +
-                            //    $"GetShiftNum: {GetShiftNum()}\r\n" +
-                            //    $"OverAmount: {(endMessage?.Money ?? 0)/100.0}\r\n" +
-                            //    $"OrderRRN: {order.OrderRRN}\r\n");
-
-                            XmlPumpClient.Init(Driver.terminal, PumpNo, -PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
-                            log("изм. статуса\r\n", true);
-
-                            //var res = XmlPumpClient.answers;
-                            var res2 = XmlPumpClient.Statuses;
-                            var res3 = XmlPumpClient.Fillings;
-
-                            XmlPumpClient.ClearAllTransactionAnswers(PumpNo, OrderRRN.PadLeft(20, '0'));
-
-                            XmlPumpClient.FiscalEventReceipt(Driver.terminal, PumpNo/*order.PumpNo*/,
-                                ShiftDocNum, DocNo, ShiftNum,
-                                summ/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, OrderRRN.PadLeft(20, '0') /*order.OrderRRN*/, 1);
-                            log($"чек:\r\n" +
-                                $"GetShiftDocNum: {ShiftDocNum}\r\n" +
-                                $"GetDocNum: {DocNo}\r\n" +
-                                $"GetShiftNum: {ShiftNum}\r\n" +
-                                $"OverAmount: {summ}\r\n" +
-                                $"OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", true);
-
-                            //DebithThread.SetTransID(Driver.TransCounter);
-
+                        if (DocType != 0 || PumpNo <= 0)
                             return 1;
-                        },
+
+                        var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
+                        var fuel = Driver.Fuels.First(t => t.Value.ID == BP_Product);
+                        int allowed = 0;
+                        foreach (var pumpFuel in Driver.Pumps[PumpNo].Fuels)
+                        {
+                            allowed += 1 << (pumpFuel.Value.ID - 1);
+                        }
+
+                        //TODO Проба со скидками!!!!
+                        XmlPumpClient.SaleDataSale(Driver.terminal, PumpNo, allowed,
+                                PreSum, summ, discount,
+                                PreQuantity, Quantity, PAYMENT_TYPE.Cash,
+                                OrderRRN.PadLeft(20, '0'), BP_Product, fuel.Key, (int)(Price/*fuel.Value.Price*/ * 100), "", 1);
+                        //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
+                        //    order.Amount, order.OverAmount, discount,
+                        //    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
+                        //    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
+                        log(
+                            "WaitCollectThread:SaleDataSale:\r\n" +
+                            $"terminal: {Driver.terminal}\r\n" +
+                            $"PumpNo: {PumpNo}\r\n" +
+                            $"allowed: {allowed}\r\n" +
+                            $"Amount: {PreSum}\r\n" +
+                            $"OverAmount: {summ}\r\n" +
+                            $"discount: {discount}\r\n" +
+                            $"Quantity: {PreQuantity}\r\n" +
+                            $"OverQuantity: {Quantity}\r\n" +
+                            $"PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n" +
+                            $"OrderRRN: {OrderRRN.PadLeft(20, '0')}\r\n" +
+                            $"ProductCode: {BP_Product}\r\n" +
+                            $"Key: {fuel.Key}\r\n" +
+                            $"fuelPrice: {(int)(Price/*fuel.Value.Price*/ * 100)}\r\n", true
+                            );
+
+                        //XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
+                        //    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
+                        //    (endMessage?.Money ?? 0) / 100m, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
+                        //log.Write($"чек:\r\n" +
+                        //    $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
+                        //    $"GetDocNum: {GetDocNum()}\r\n" +
+                        //    $"GetShiftNum: {GetShiftNum()}\r\n" +
+                        //    $"OverAmount: {(endMessage?.Money ?? 0)/100.0}\r\n" +
+                        //    $"OrderRRN: {order.OrderRRN}\r\n");
+
+                        XmlPumpClient.Init(Driver.terminal, PumpNo, -PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
+                        log("изм. статуса\r\n", true);
+
+                        //var res = XmlPumpClient.answers;
+                        var res2 = XmlPumpClient.Statuses;
+                        var res3 = XmlPumpClient.Fillings;
+
+                        XmlPumpClient.ClearAllTransactionAnswers(PumpNo, OrderRRN.PadLeft(20, '0'));
+
+                        XmlPumpClient.FiscalEventReceipt(Driver.terminal, PumpNo/*order.PumpNo*/,
+                            ShiftDocNum, DocNo, ShiftNum,
+                            summ/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, OrderRRN.PadLeft(20, '0') /*order.OrderRRN*/, 1);
+                        log($"чек:\r\n" +
+                            $"GetShiftDocNum: {ShiftDocNum}\r\n" +
+                            $"GetDocNum: {DocNo}\r\n" +
+                            $"GetShiftNum: {ShiftNum}\r\n" +
+                            $"OverAmount: {summ}\r\n" +
+                            $"OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", true);
+
+                        //DebithThread.SetTransID(Driver.TransCounter);
+
+                        return 1;
+                    },
                     "Sample Control", IntPtr.Zero/*ctxSrc*/) != 1
                 )
                 {
@@ -668,7 +674,9 @@ namespace SPC_Raspberry
             //Application.SetCompatibleTextRenderingDefault(false);
             //Application.Run(new Form1());
             Console.WriteLine("Opening...");
-            OpenDriver();
+            Driver.StartBenzuber();
+            //OpenDriver();
+
             //TestTrans(1, 2, 1, 1, 542, 3);
         }
     }

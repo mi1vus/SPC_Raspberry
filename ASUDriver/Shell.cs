@@ -42,7 +42,13 @@ namespace SmartPumpControlRemote
             //else if (TID_to_IP.Count > 0)
             //    return TID_to_IP.First().Key;
             //else
-            Console.WriteLine($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState ? "Online" : "Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}");
+
+
+
+//            Console.WriteLine($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState ? "Online" : "Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}");
+            
+            
+            
             //System.Windows.Forms.MessageBox.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             return "";
         }

@@ -1,5 +1,4 @@
-﻿using ProjectSummer.Repository;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -11,12 +10,9 @@ using System.ServiceModel.Channels;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
-using ASUDriver;
-using static BenzuberServer.StationCommon;
-using static BenzuberServer.StationGate;
-using static BenzuberServer.StationGate.StationInformaton;
+using ProjectSummer.Repository;
 
-namespace BenzuberServer
+namespace ASUDriver
 {
     public class StationGate
     {
@@ -29,7 +25,7 @@ namespace BenzuberServer
             public string ToXmlString()
             {
                 var xmlSerializer = new XmlSerializer(GetType());
-                
+
                 using (var textWriter = new Utf8StringWriter())
                 {
                     xmlSerializer.Serialize(textWriter, this);
@@ -98,7 +94,7 @@ namespace BenzuberServer
             [OperationContract]
             int OnDebitPump(int PumpNum, int Fuel, string TransID, decimal Amount);
             [OperationContract]
-            StationInformaton GetStationInfo();
+            StationGate.StationInformaton GetStationInfo();
             [OperationContract]
             void OnPingOK();
             [OperationContract]
@@ -131,7 +127,7 @@ namespace BenzuberServer
     }
 
 
-    public class Excange : IExcangeCallback
+    public class Excange : StationCommon.IExcangeCallback
     {
 
         enum ErrorCodes : int
@@ -147,9 +143,9 @@ namespace BenzuberServer
         }
 
         public static ConfigMemory config = ConfigMemory.GetConfigMemory("Benzuber");
-        
-        static Logger log = new Logger("Benzuber");
-        static RemotePump_Driver.RemotePump pump = new RemotePump_Driver.RemotePump(); 
+
+        public static Logger log = new Logger("Benzuber");
+        static RemotePump_Driver.RemotePump pump = new RemotePump_Driver.RemotePump();
         static Excange()
         {
             pump.SetID("Benzuber");
@@ -171,9 +167,9 @@ namespace BenzuberServer
                         {
                             proxy.FillingOver(d.OrderRRN, d.OverAmount);
                         }
-                        catch(Exception ex)
+                        catch (Exception ex)
                         {
-                            log.Write("Ошибка при выплнении подтверждения налива"+ex.ToString());
+                            log.Write("Ошибка при выплнении подтверждения налива" + ex.ToString());
                             unReciverOrders.Add(d);
                             log.Write($"Не удалось подтвердить налив RNN: {d.OrderRRN}, Факт. Сумма: {d.OverAmount}");
                         }
@@ -196,7 +192,7 @@ namespace BenzuberServer
             }).Start();
         }
         private static List<RemotePump_Driver.OrderInfo> unReciverOrders = new List<RemotePump_Driver.OrderInfo>();
-        
+
         public int OnDebitPump(int PumpNum, int Fuel, string TransID, decimal Amount)
         {
             try
@@ -221,17 +217,18 @@ namespace BenzuberServer
                     log.Write("Транзакция сохранена в архив.");
 
                     var ret = pump.SetDose(
-                        new RemotePump_Driver.OrderInfo {
+                        new RemotePump_Driver.OrderInfo
+                        {
                             TID = "Benzuber",
                             Amount = Amount,
-                            Quantity = Amount/product.Price,
+                            Quantity = Amount / product.Price,
                             PumpNo = PumpNum,
                             OrderRRN = TransID.PadLeft(20, '0'),
-                            
+
                             Price = product.Price,
-                            BasePrice = product.Price,                         
+                            BasePrice = product.Price,
                             ProductCode = product.ID,
-             
+
                             CardNO = TransID.PadLeft(20, '0'),
                             DiscontCardNO = "",
                             DiscontCardType = "-2",
@@ -245,7 +242,7 @@ namespace BenzuberServer
                 }
 
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 log.Write(ex.ToString());
             }
@@ -263,8 +260,8 @@ namespace BenzuberServer
             string result = BitConverter.ToString(checkSum).Replace("-", String.Empty);
             return result;
         }
-        static IExcange proxy = null;
-        static bool enable = false;
+        static StationCommon.IExcange proxy = null;
+        public static bool enable = false;
         static bool _connection = false;
         /// <summary>
         /// Состояние подключения к сервису
@@ -317,7 +314,7 @@ namespace BenzuberServer
                     try
                     {
                         //var str = string.Format("net.tcp://localhost:1102");
-                      
+
                         var uri = new Uri(str);
                         var callback = new Excange();
                         //log.Write("Create callback");
@@ -330,7 +327,7 @@ namespace BenzuberServer
 
 
                         // log.Write("Binding");
-                        var client = new IExcangeClient(callback, binding, new EndpointAddress(uri));
+                        var client = new StationCommon.IExcangeClient(callback, binding, new EndpointAddress(uri));
                         //client.ClientCredentials.UserName.UserName = config["station_id"];               
                         //client.ClientCredentials.UserName.Password = hw_id;
 
@@ -344,7 +341,7 @@ namespace BenzuberServer
                         //log.Write("Excange object");
                         proxy = client.ChannelFactory.CreateChannel(new EndpointAddress(uri));
 
-                     //   log.Write("Proxy");
+                        //   log.Write("Proxy");
 
 
                         try
@@ -376,10 +373,10 @@ namespace BenzuberServer
                                             try
                                             {
                                                 LastUpdate = DateTime.Now;
-                                                 var updateResponse = proxy.GetUpdate(config["station_id"], FileVersionInfo.GetVersionInfo(location).FileVersion, Version);
-                                                if (updateResponse.Data != null && updateResponse.MD5 != null 
-                                                    && updateResponse.MD5 == Update.GetDataMd5Hash(updateResponse.Data))
-                                                {                                                    
+                                                var updateResponse = proxy.GetUpdate(config["station_id"], FileVersionInfo.GetVersionInfo(location).FileVersion, Version);
+                                                if (updateResponse.Data != null && updateResponse.MD5 != null
+                                                    && updateResponse.MD5 == StationCommon.Update.GetDataMd5Hash(updateResponse.Data))
+                                                {
                                                     if (File.Exists(location + ".back"))
                                                     {
                                                         try
@@ -396,7 +393,7 @@ namespace BenzuberServer
                                                         }
                                                         catch { }
                                                     }
-                                                    if(!File.Exists(location))
+                                                    if (!File.Exists(location))
                                                     {
                                                         try
                                                         {
@@ -405,7 +402,7 @@ namespace BenzuberServer
                                                         }
                                                         catch { }
                                                     }
-                                                    
+
                                                 }
                                             }
                                             catch { }
@@ -441,37 +438,37 @@ namespace BenzuberServer
             log.Write($"F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0, true);
         }
 
-        private int get_int_code(int ex_code) => int.Parse((from code in config.GetValueNames("fuel_code_") where config[code] == ex_code.ToString() select code.Replace("fuel_code_", ""))?.SingleOrDefault()??"-1");
+        private int get_int_code(int ex_code) => int.Parse((from code in config.GetValueNames("fuel_code_") where config[code] == ex_code.ToString() select code.Replace("fuel_code_", ""))?.SingleOrDefault() ?? "-1");
         private int get_ex_code(int int_code) => int.Parse(config["fuel_code_" + int_code]);
 
-        public StationInformaton GetStationInfo()
+        public StationGate.StationInformaton GetStationInfo()
         {
             lock (pump)
             {
 
                 try
                 {
-                    log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0,true);
-                    var info = new StationInformaton()
+                    log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0, true);
+                    var info = new StationGate.StationInformaton()
                     {
-                        Fuels = new List<FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
+                        Fuels = new List<StationGate.StationInformaton.FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new StationGate.StationInformaton.FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
                     };
 
                     foreach (var fuel in info.Fuels) log.Write($"{fuel.Code}. {fuel.Name} = {fuel.Price:0.00}р");
 
-                    List<PumpInfo> pumps = new List<PumpInfo>();
+                    List<StationGate.StationInformaton.PumpInfo> pumps = new List<StationGate.StationInformaton.PumpInfo>();
                     var driverPumps = ASUDriver.Driver.Pumps.ToList();
                     foreach (var p in driverPumps)
                     {
                         var state = pump.GetPumpInformation(p.Value.Pump);
                         log.Write($"{state.ToString()}");
-                        pumps.Add(new PumpInfo
+                        pumps.Add(new StationGate.StationInformaton.PumpInfo
                         {
                             IsAvailable = state.State == RemotePump_Driver.PumpState.Online,
                             MinOrder = 2,
                             Number = p.Value.Pump,
                             TransactionID = state.TransactionID,
-                            Nozzles = new List<PumpInfo.NozzleInfo>(from n in state.ProductInformation select new PumpInfo.NozzleInfo { FuelCode = get_ex_code(n.Code), NozzleUp = (state.SelectedProduct == n.Code) })
+                            Nozzles = new List<StationGate.StationInformaton.PumpInfo.NozzleInfo>(from n in state.ProductInformation select new StationGate.StationInformaton.PumpInfo.NozzleInfo { FuelCode = get_ex_code(n.Code), NozzleUp = (state.SelectedProduct == n.Code) })
                         });
 
                     }
@@ -481,9 +478,9 @@ namespace BenzuberServer
                 }
                 catch (Exception ex)
                 {
-                    if(ex is FormatException)
+                    if (ex is FormatException)
                     {
-                        log.Write("Некорректно введена таблица соответствия видов топлива",0,true);
+                        log.Write("Некорректно введена таблица соответствия видов топлива", 0, true);
                     }
                     else
                         log.Write("GetStationInfo()r\n" + ex.ToString(), 0, true);
