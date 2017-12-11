@@ -59,7 +59,8 @@ namespace ASUDriver
         OnPumpStatusChange  = 3,
         OnPumpStatusChangeFilling = 4,
         OnSetGradePrices = 5,
-        OnPumpError         = 6,
+        Shift = 6,
+        OnPumpError = 7,
     }
 
     [XmlRoot("PumpResponse")]
@@ -151,6 +152,8 @@ namespace ASUDriver
         public string Date { get; set; }
         [XmlElement("Time")]
         public string Time { get; set; }
+        [XmlElement("Shift")]
+        public Shift Shift { get; set; }
         [XmlElement("Status")]
         public int Status { get; set; }
         public PUMP_STATUS StatusObj => (PUMP_STATUS) Status;
@@ -166,6 +169,17 @@ namespace ASUDriver
         public string OrderUID { get; set; }
         [XmlElement("Nozzles")]
         public List<Nozzle> Nozzles { get; set; }
+    }
+    public class Shift
+    {
+        [XmlElement("Begin")]
+        public string Begin { get; set; }
+        [XmlElement("Number")]
+        public int Number { get; set; }
+        [XmlElement("Running")]
+        public int Running { get; set; }
+        public long ShiftDocNum { get; set; }
+        public long DocNum { get; set; }
     }
 
     [XmlRoot("OnSetGradePrices")]
@@ -210,30 +224,33 @@ namespace ASUDriver
     public class XmlPumpClient
     {
         public const int BuffSize = 65536;
-        public static Socket socket; 
-        public static TcpClient client;
-        public static NetworkStream stream;
-        private static byte[] sockHost;
-        private static int sockPort;
-        private static int sockTerminal;
-        private static string exchangeLogDir = "exchange2.log";
-
+        public static Socket Socket; 
+        public static TcpClient Client;
+        public static NetworkStream Stream;
+        private static byte[] _sockHost;
+        private static int _sockPort;
+        private static int _sockTerminal;
+        private static object ExchangeLogLocker = new object();
+        private const string ExchangeLogDir = "exchange.log";
+        public static int ExchangeLogLevel = 0;
+        public static int UnblockingTimeoutMin = 15;
         public static int SendTimeout;
         public static int WaitAnswerTimeout;
 
         public static Encoding Enc = Encoding.UTF8;
 
-        //public static List<object> answers;
+        public static object StatusesLocker = new object();
         public static Dictionary<Tuple<int, MESSAGE_TYPES>, object> Statuses;
+        public static object FillingsLocker = new object();
         public static Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>> Fillings;
 
         public static void StartClient(string bHostB2, int iPort)
         {
-            client = new TcpClient();
+            Client = new TcpClient();
             try
             {
-                client.Connect(bHostB2, iPort); //подключение клиента
-                stream = client.GetStream(); // получаем поток
+                Client.Connect(bHostB2, iPort); //подключение клиента
+                Stream = Client.GetStream(); // получаем поток
 
                 //string message = "-------";
                 //SendMessage(message);
@@ -241,14 +258,14 @@ namespace ASUDriver
                 //stream.Write(data, 0, data.Length);
 
                 //запускаем новый поток для получения данных
-                Thread receiveThread = new Thread(new ThreadStart(ReceiveMessageClient));
+                Thread receiveThread = new Thread(ReceiveMessageClient) { IsBackground = true };
                 receiveThread.Start(); //старт потока
                 //Console.WriteLine("Добро пожаловать, {0}", userName);
 
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Driver.log.Write("XMLPump: ERROR:" + ex + "\r\n", 0, true);
             }
             finally
             {
@@ -258,7 +275,7 @@ namespace ASUDriver
 
         public static void StartSocket(byte[] bHostB2, int iPort, int terminal)
         {
-            if (socket != null)
+            if (Socket != null)
                 return;
 
             IPHostEntry hostEntry = null;
@@ -271,28 +288,28 @@ namespace ASUDriver
 
             if (tempSocket.Connected)
             {
-                socket = tempSocket;
+                Socket = tempSocket;
                 //socket.Blocking = false;
                 //answers = new List<object>();
                 Statuses = new Dictionary<Tuple<int, MESSAGE_TYPES>, object>();
                 Fillings = new Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>>();
-                Thread receiveThread = new Thread(new ThreadStart(ReceiveMessageSocket));
-                sockHost = bHostB2;
-                sockPort = iPort;
-                sockTerminal = terminal;
+                Thread receiveThread = new Thread(ReceiveMessageSocket){ IsBackground = true };
+                _sockHost = bHostB2;
+                _sockPort = iPort;
+                _sockTerminal = terminal;
                 receiveThread.Start(); //старт потока
             }
         }
 
         public static void RestatrSocketIfNotAlive(byte[] bHostB2, int iPort)
         {
-            bool blockingState = socket.Blocking;
+            bool blockingState = Socket.Blocking;
             try
             {
                 byte[] tmp = new byte[1];
 
-                socket.Blocking = false;
-                socket.Send(tmp, 0, 0);
+                Socket.Blocking = false;
+                Socket.Send(tmp, 0, 0);
                 //Console.WriteLine("Connected!");
             }
             catch (SocketException e)
@@ -303,14 +320,7 @@ namespace ASUDriver
                     //MessageBox.Show($"Disconnected: error code {e.NativeErrorCode}!");
                     //throw new Exception("ERROR Разрыв соединения с попыткой восстановления!");
 
-                    if (!File.Exists(exchangeLogDir))
-                    {
-                        try
-                        {
-                            File.AppendAllText(exchangeLogDir, $"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
-                        }
-                        catch { }
-                    }
+                    WriteToExchangeLog($"\r\n********ERROR*********\r\nРазрыв соединения с попыткой восстановления!");
                     IPHostEntry hostEntry = null;
 
                     IPEndPoint ipe = new IPEndPoint(new IPAddress(bHostB2), iPort);
@@ -321,14 +331,14 @@ namespace ASUDriver
 
                     if (tempSocket.Connected)
                     {
-                        socket = tempSocket;
+                        Socket = tempSocket;
                         //socket.Blocking = false;
                         //lock (answers)
                         //{
                         //    answers.RemoveAll(t =>t is OnDataInit);
                         //    answers.Add("Замена сокета!!!1!!");
                         //}
-                        InitData(sockTerminal);
+                        InitData(_sockTerminal);
                     }
                 }
                 //else
@@ -336,7 +346,7 @@ namespace ASUDriver
             }
             finally
             {
-                socket.Blocking = blockingState;
+                Socket.Blocking = blockingState;
             }
         }
 
@@ -348,7 +358,7 @@ namespace ASUDriver
             //{
             //string message = Console.ReadLine();
             byte[] data = Encoding.ASCII.GetBytes(message);
-            stream?.Write(data, 0, data.Length);
+            Stream?.Write(data, 0, data.Length);
             //}
         }
 
@@ -356,23 +366,16 @@ namespace ASUDriver
         {
             byte[] bytesToSent = Enc.GetBytes(message);
 
-            if (socket == null) return;
+            if (Socket == null) return;
 
-            lock (socket)
-                RestatrSocketIfNotAlive(sockHost, sockPort);
+            lock (Socket)
+                RestatrSocketIfNotAlive(_sockHost, _sockPort);
 
             // Send request to the server.
-            lock (socket)
-                socket.Send(bytesToSent, bytesToSent.Length, 0);
+            lock (Socket)
+                Socket.Send(bytesToSent, bytesToSent.Length, 0);
 
-            if (!File.Exists(exchangeLogDir))
-            {
-                try
-                {
-                    File.AppendAllText(exchangeLogDir, $"\r\n********send*********\r\n{message}");
-                }
-                catch { }
-            }
+            WriteToExchangeLog($"\r\n********send*********\r\n{message}");
             Thread.Sleep(timeout);
         }
 
@@ -395,10 +398,10 @@ namespace ASUDriver
                     int bytes = 0;
                     do
                     {
-                        bytes = stream.Read(data, 0, data.Length);
+                        bytes = Stream.Read(data, 0, data.Length);
                         if (bytes != 0)
                             builder.Append(Encoding.ASCII.GetString(data, 0, bytes));
-                    } while (stream != null && stream.DataAvailable);
+                    } while (Stream != null && Stream.DataAvailable);
 
                     if (builder.Length != 0)
                     {
@@ -413,8 +416,7 @@ namespace ASUDriver
                 }
                 catch(Exception ex)
                 {
-                    Console.WriteLine("Подключение прервано!"); //соединение было прервано
-                    Console.ReadLine();
+                    Driver.log.Write("XMLPump: Подключение прервано! ERROR:" + ex + "\r\n", 0, true);
                     Disconnect();
                 }
             }
@@ -422,16 +424,10 @@ namespace ASUDriver
         public static void ReceiveMessageSocket()
         {
             StringBuilder builder = new StringBuilder();
-            if (File.Exists(exchangeLogDir))
-            {
-                try
-                {
-                    File.Delete(exchangeLogDir);
-                }
-                catch { }
-            }
-            //File.WriteAllText(exchangeLogDir, string.Empty);
-            //File.Delete(exchangeLogDir);
+            ResetExchangeLog();
+
+            //File.WriteAllText(ExchangeLogDir, string.Empty);
+            //File.Delete(ExchangeLogDir);
             while (true)
             {
                 try
@@ -440,16 +436,16 @@ namespace ASUDriver
                     Byte[] bytesReceived = new Byte[65536];
                     int bytes = 0;
 
-                    lock (socket)
-                        RestatrSocketIfNotAlive(sockHost, sockPort);
+                    lock (Socket)
+                        RestatrSocketIfNotAlive(_sockHost, _sockPort);
 
                     //Console.WriteLine("Connected: {0}", client.Connected);
 
                     // The following will block until te page is transmitted.
-                    lock (socket)
-                        while (socket.Available != 0)
+                    lock (Socket)
+                        while (Socket.Available != 0)
                         {
-                            bytes = socket.Receive(bytesReceived, bytesReceived.Length, 0);
+                            bytes = Socket.Receive(bytesReceived, bytesReceived.Length, 0);
                             if (bytes != 0)
                                 builder.Append(Enc.GetString(bytesReceived, 0, bytes));
                         }
@@ -457,14 +453,7 @@ namespace ASUDriver
                     if (builder.Length != 0)
                     {
                         var tmp = builder.ToString();
-                        if (File.Exists(exchangeLogDir))
-                        {
-                            try
-                            {
-                                File.AppendAllText(exchangeLogDir, $"\r\n********recv*********\r\n{tmp}");
-                            }
-                            catch { }
-                        }
+                        WriteToExchangeLog($"\r\n********recv*********\r\n{tmp}");
                         string[] ansverStrings = builder.ToString()
                             .Split(new[] {"<?xml version=\"1.0\"?>"}, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var xml in ansverStrings)
@@ -472,25 +461,11 @@ namespace ASUDriver
                             if (isValidXml(xml))
                             {
                                 builder.Remove(0, xml.Length + 21);
-                                if (File.Exists(exchangeLogDir))
-                                {
-                                    try
-                                    {
-                                        File.AppendAllText(exchangeLogDir, "\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
-                                    }
-                                    catch { }
-                                }
+                                WriteToExchangeLog("\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
                             }
                             else
                             {
-                                if (File.Exists(exchangeLogDir))
-                                {
-                                    try
-                                    {
-                                        File.AppendAllText(exchangeLogDir, $"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
-                                    }
-                                    catch { }
-                                }
+                                WriteToExchangeLog($"\r\n********ERROR*********\r\nnot valid xml\r\n{xml}");
                                 continue;
                             }
 
@@ -503,7 +478,7 @@ namespace ASUDriver
                                     OnDataInit result = (OnDataInit) serializer.Deserialize(reader);
                                     //lock(answers)
                                     //    answers.Add(result);
-                                    lock (Statuses)
+                                    lock (StatusesLocker)
                                     {
                                         Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (-1, MESSAGE_TYPES.OnDataInit)] =  result;
@@ -520,8 +495,11 @@ namespace ASUDriver
                                     //    answers.Add(result);
                                     //if (result.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                                     //PumpRequestCollect(result.OptId, result.PumpNo);
-                                    lock (Statuses)
+                                    lock (StatusesLocker)
                                     {
+                                        Statuses[new Tuple<int, MESSAGE_TYPES>
+                                            (-1, MESSAGE_TYPES.Shift)] = result.Shift;
+
                                         Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpNo, MESSAGE_TYPES.OnPumpStatusChange)] =  result;
 
@@ -548,7 +526,7 @@ namespace ASUDriver
                                     OnSetGradePrices result = (OnSetGradePrices) serializer.Deserialize(reader);
                                     //lock (answers)
                                     //    answers.Add(result);
-                                    lock (Statuses)
+                                    lock (StatusesLocker)
                                     {
                                         Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (-1, MESSAGE_TYPES.OnSetGradePrices)] =  result ;
@@ -563,7 +541,7 @@ namespace ASUDriver
                                     PumpResponse result = (PumpResponse) serializer.Deserialize(reader);
                                     //lock (answers)
                                     //    answers.Add(result);
-                                    lock (Statuses)
+                                    lock (StatusesLocker)
                                     {
                                         if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpObj.PumpNumber, MESSAGE_TYPES.PumpResponse), out msgs))
@@ -585,7 +563,7 @@ namespace ASUDriver
                                     OnPumpError result = (OnPumpError)serializer.Deserialize(reader);
                                     //lock (answers)
                                     //    answers.Add(result);
-                                    lock (Statuses)
+                                    lock (StatusesLocker)
                                     {
                                         Statuses[new Tuple<int, MESSAGE_TYPES>
                                             (result.PumpNo, MESSAGE_TYPES.OnPumpError)] = result;
@@ -599,20 +577,63 @@ namespace ASUDriver
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Подключение прервано!"); //соединение было прервано
-                    Console.ReadLine();
+                    Driver.log.Write("XMLPump: Подключение прервано! ERROR:" + ex + "\r\n", 0, true);
                     Disconnect();
                 }
             }
         }
 
+        public static Thread pump_status_update_background_th = new Thread(pump_status_update_background)
+        { IsBackground = true};
+
+        public static void pump_status_update_background()
+        {
+            while (true)
+            {
+                try
+                {
+                    List<int> inds;
+                    lock (Driver.PumpsLocker)
+                        inds = Driver.Pumps.Keys.ToList();
+                    foreach (var pmpInd in inds)
+                    {
+                        Driver.log.Write("Обновление состояния ТРК: " + pmpInd + "\r\n", 3, true);
+
+                        //DispStatus:
+                        //	0 - ТРК онлайн(при этом TransID должен = -1, иначе данный статус воспринимается как 3)
+                        //	1 - ТРК заблокирована
+                        //	3 - Осуществляется отпуск топлива
+                        //	10 - ТРК занята
+                        PumpGetStatus(Driver.terminal, pmpInd, 1);
+
+                        lock (Driver.PumpsLocker)
+                        {
+                            var pmp = Driver.Pumps[pmpInd];
+                            if (pmp.Blocked && pmp.BlockInitTime != null && DateTime.Now.CompareTo(pmp.BlockInitTime.Value.AddMinutes(UnblockingTimeoutMin)) > 0) 
+                            {
+                                pmp.Blocked = false;
+                                pmp.BlockInitTime = null;
+                                Driver.Pumps[pmpInd] = pmp;
+                            }
+                        }
+                }
+                }
+                catch (Exception ex)
+                {
+                    Driver.log.Write("Error Обновление состояния ТРК: " + ex + "\r\n", 3, true);
+                }
+
+                Thread.Sleep(1000);
+            }
+        }
+
         public static void Disconnect()
         {
-            stream?.Close();//отключение потока
-            client?.Close();//отключение клиента
+            Stream?.Close();//отключение потока
+            Client?.Close();//отключение клиента
 
-            stream = null;
-            client = null;
+            Stream = null;
+            Client = null;
 //            Environment.Exit(0); //завершение процесса
         }
 
@@ -883,14 +904,14 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
         {
             bool next = true;
             List<object> item  = null;
-            lock (Statuses)
+            lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     item?.RemoveAll(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
 
             PumpRequestAuthorize(TerminalId, PumpId, RequestID, NozzleAllowed, NozzleNumber, RNN, DeliveryLimit, DeliveryUnit);
 
-            lock (Statuses)
+            lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     next = !item.Any(t => 
                     string.Compare(((PumpResponse) t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
@@ -898,7 +919,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (Statuses)
+                lock (StatusesLocker)
                     if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                         next = !item.Any(t =>
                         string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
@@ -912,7 +933,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             }
 
             PumpResponse authorizeResponse = null;
-            lock (Statuses)
+            lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     authorizeResponse = (PumpResponse)item.Last(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Authorize", StringComparison.Ordinal) == 0);
@@ -932,7 +953,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
 
             OnPumpStatusChange оnPumpStatusChanged = null;
             Thread.Sleep(XmlPumpClient.WaitAnswerTimeout);
-            //lock (Statuses)
+            //lock (StatusesLocker)
             //{
             //    if (Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange), out item1) && item1 != null)
             //        оnPumpStatusChanged = (OnPumpStatusChange)item1;
@@ -943,13 +964,15 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             //    && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE
             //    && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION;
             //}
-
+            float do_count = 0;
             do
             {
-                Driver.log.Write($"EndFillingEventWait: [{PumpId}] {rnn}", 0, true);
+                if (do_count <= 0)
+                    Driver.log.Write($"Begin EndFillingEventWait:  [{PumpId}] {rnn}", 0, true);
+                ++do_count;
                 Thread.Sleep(250);
                 //timeout -= 250;
-                lock (Statuses)
+                lock (StatusesLocker)
                 {
                     if (
                         Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChange),
@@ -969,11 +992,12 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
                                ;
                 }
             } while (next);
+            Driver.log.Write($"End EndFillingEventWait: [{PumpId}] {rnn} time ~ {0.25* do_count}c.", 0, true);
             //if (timeout <= 0)
             //    return null;
             ASUDriver.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2?.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
             OnPumpStatusChange result = null;
-            lock (Statuses)
+            lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) && item2 != null)
                     result = (OnPumpStatusChange)item2.LastOrDefault(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
                         && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
@@ -985,14 +1009,14 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
         {
             bool next = true;
             List<object> item = null;
-            lock (Statuses)
+            lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     item?.RemoveAll(t => 
                     string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
 
             PumpRequestCollect(TerminalId, PumpId, RequestID, RNN);
 
-            //lock (Statuses)
+            //lock (StatusesLocker)
             //    if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
             //        next = !item.Any(t =>
             //        string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
@@ -1000,7 +1024,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             {
                 Thread.Sleep(250);
                 timeout -= 250;
-                lock (Statuses)
+                lock (StatusesLocker)
                     if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                         next = !item.Any(t =>
                                 string.Compare(((PumpResponse) t).RequestType, "Collect", StringComparison.Ordinal) == 0);
@@ -1011,7 +1035,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
                 return false;
 
             PumpResponse collectResponse = null;
-            lock (Statuses)
+            lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     collectResponse = (PumpResponse)item.Last(t =>
                     string.Compare(((PumpResponse)t).RequestType, "Collect", StringComparison.Ordinal) == 0);
@@ -1022,7 +1046,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
         public static void ClearAllTransactionAnswers(int PumpId, string RNN)
         {
             List<object> item = null;
-            lock (Statuses)
+            lock (StatusesLocker)
             {
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.PumpResponse), out item))
                     item.Clear();
@@ -1051,7 +1075,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             SendMessage(pumpRequest1, SendTimeout);
         }
 
-        public static void FiscalEventReceipt(int TerminalId, int PumpId, int DocNumberInShift, int DocNumber, int ShiftNumber, decimal SaleTotal, decimal RefundAmount, PAYMENT_TYPE PaymentType, string RNN, int Cashier = 1)
+        public static void FiscalEventReceipt(int TerminalId, int PumpId, long DocNumberInShift, long DocNumber, long ShiftNumber, decimal SaleTotal, decimal RefundAmount, PAYMENT_TYPE PaymentType, string RNN, int Cashier = 1)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -1133,6 +1157,168 @@ $@"
         public static string DecimalToRoundF2String(decimal value)
         {
             return Math.Round(value, 2, MidpointRounding.ToEven).ToString("F2", CultureInfo.InvariantCulture);
+        }
+
+        public static Shift ReadAndUpdateCurrentShift()
+        {
+            Shift res = null;
+            lock (StatusesLocker)
+            {
+                object item = null;
+                if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
+                    MESSAGE_TYPES.Shift), out item) && item != null)
+                    res = (Shift)item;
+            }
+
+            if (res == null)
+                return null;
+
+            var curr_shift = res.Number;
+            var last_trans_in_shift_src = ReadFromFile(1);
+            var last_trans_src = ReadFromFile(2);
+            var last_shift_src = ReadFromFile(3);
+            long last_trans_in_shift = 0;
+            long last_trans = 0;
+            long last_shift = 0;
+            bool read_is_ok = false;
+            if (long.TryParse(last_trans_in_shift_src, out last_trans_in_shift) &&
+               long.TryParse(last_trans_src, out last_trans) &&
+               long.TryParse(last_shift_src, out last_shift))
+            {
+                if (last_shift != curr_shift)
+                {
+                    WriteOrReplaceToFile(1, "0");
+                    WriteOrReplaceToFile(3, curr_shift.ToString());
+                    last_trans_in_shift = 0;
+                }
+            }
+            res.DocNum = last_trans;
+            res.ShiftDocNum = last_trans_in_shift;
+
+            return res;
+        }
+
+        public static void WriteToExchangeLog(string msg)
+        {
+            if (ExchangeLogLevel >= 3)
+            {
+                try
+                {
+                    if (!File.Exists(ExchangeLogDir))
+                    {
+                        ResetExchangeLog();
+                    }
+                    lock(ExchangeLogLocker)
+                    {
+                        File.AppendAllText(ExchangeLogDir, msg);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Driver.log.Write("XMLPump: ERROR Write:" + ex + "\r\n", 0, true);
+                }
+            }
+        }
+        public static void ResetExchangeLog()
+        {
+            try
+            {
+                lock (ExchangeLogLocker)
+                {
+                    if (File.Exists(ExchangeLogDir))
+                    {
+                        File.Delete(ExchangeLogDir);
+                    }
+                    // Create a file to write to.
+                    using (var f = File.CreateText(ExchangeLogDir))
+                    {
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Driver.log.Write("XMLPump: ERROR Reset:" + ex + "\r\n", 0, true);
+            }
+        }
+
+        private static object FileLocker = new object();
+
+        public static void WriteOrReplaceToFile(int param, string data)
+        {
+            //bool logIsError = text.Contains("ERROR!!!");
+            //bool writeToLog = logIsError;
+            //#if DEBUG
+            //        writeToLog = true;
+            //#endif
+
+            //if (!writeToLog)
+            //    return;
+
+            string path = @"benzuber_shift_doc.dat";
+            // This text is added only once to the file.
+            if (!File.Exists(path))
+            {
+                // Create a file to write to.
+                using (var f = File.CreateText(path))
+                {
+                }
+            }
+            lock (FileLocker)
+            {
+                var fileList = File.ReadAllLines(path).ToList();
+
+                var ind = fileList.FindIndex(s => s.Contains($"[{param}]:"));
+                if (ind >= 0)
+                {
+                    fileList[ind] = $"[{param}]:{data}";
+                    File.WriteAllLines(path, fileList);
+                }
+                else
+                    using (StreamWriter sw = File.AppendText(path))
+                    {
+                        sw.Write($"[{param}]:{data}{Environment.NewLine}");
+                    }
+            }
+        }
+        //        if (showMsg)
+        //MessageBox.Show(data);
+        public static string ReadFromFile(int param)
+        {
+            //bool logIsError = text.Contains("ERROR!!!");
+            //bool writeToLog = logIsError;
+            //#if DEBUG
+            //        writeToLog = true;
+            //#endif
+
+            //if (!writeToLog)
+            //    return;
+
+            string path = @"benzuber_shift_doc.dat";
+            string dat = string.Empty;
+            if (File.Exists(path))
+            {
+                lock (FileLocker)
+                {
+                    var fileLise = File.ReadAllLines(path).ToList();
+                    fileLise.ForEach(s =>
+                    {
+                        var arr = s.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+                        int sec =
+                            Convert.ToInt32(arr[0].Split(new[] { '[', ']' }, StringSplitOptions.RemoveEmptyEntries)[0]);
+                        if (param.CompareTo(sec) == 0)
+                            for (int ind = 1; ind < arr.Length; ++ind)
+                            {
+                                if (ind > 1)
+                                    dat += ':';
+                                dat += arr[ind];
+                            }
+                    });
+                }
+            }
+            //        if (showMsg)
+            //MessageBox.Show(data);
+
+            return dat;
         }
     }
 }

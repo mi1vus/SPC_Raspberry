@@ -145,6 +145,7 @@ namespace ASUDriver
         public static ConfigMemory config = ConfigMemory.GetConfigMemory("Benzuber");
 
         public static Logger log = new Logger("Benzuber");
+        static object pumpLocker = new object();
         static RemotePump_Driver.RemotePump pump = new RemotePump_Driver.RemotePump();
         static Excange()
         {
@@ -198,7 +199,7 @@ namespace ASUDriver
             try
             {
 
-                lock (pump)
+                lock (pumpLocker)
                 {
                     log.Write(string.Format("Запрос на установку заказа. PumpNum: {0}, Fuel: {1}, TransID: {2}, Amount: {3}",
                         PumpNum, Fuel, TransID, Amount));
@@ -319,7 +320,7 @@ namespace ASUDriver
                         var callback = new Excange();
                         //log.Write("Create callback");
                         var binding = new NetTcpBinding(SecurityMode.Transport);
-                        //binding.Security.Message.ClientCredentialType = MessageCredentialType.UserName;
+                        //binding.Security.ToString().ClientCredentialType = MessageCredentialType.UserName;
                         //binding.Security.Transport.ClientCredentialType = TcpClientCredentialType.None;
 
                         binding.Security.Message.ClientCredentialType = MessageCredentialType.None;
@@ -435,7 +436,10 @@ namespace ASUDriver
                 }
             }
             ).Start();
-            log.Write($"F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0, true);
+            int cnt;
+            lock (Driver.PumpsLocker)
+            cnt = Driver.Pumps.Count;
+            log.Write($"F:{ASUDriver.Driver.Fuels.Count} P:{cnt}", 0, true);
         }
 
         private int get_int_code(int ex_code) => int.Parse((from code in config.GetValueNames("fuel_code_") where config[code] == ex_code.ToString() select code.Replace("fuel_code_", ""))?.SingleOrDefault() ?? "-1");
@@ -443,12 +447,15 @@ namespace ASUDriver
 
         public StationGate.StationInformaton GetStationInfo()
         {
-            lock (pump)
+            lock (pumpLocker)
             {
 
                 try
                 {
-                    log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{ASUDriver.Driver.Pumps.Count}", 0, true);
+                    int cnt;
+                    lock (Driver.PumpsLocker)
+                        cnt = Driver.Pumps.Count;
+                    log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{cnt}", 0, true);
                     var info = new StationGate.StationInformaton()
                     {
                         Fuels = new List<StationGate.StationInformaton.FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new StationGate.StationInformaton.FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
@@ -457,7 +464,9 @@ namespace ASUDriver
                     foreach (var fuel in info.Fuels) log.Write($"{fuel.Code}. {fuel.Name} = {fuel.Price:0.00}р");
 
                     List<StationGate.StationInformaton.PumpInfo> pumps = new List<StationGate.StationInformaton.PumpInfo>();
-                    var driverPumps = ASUDriver.Driver.Pumps.ToList();
+                    List<KeyValuePair<int, Driver.PumpInfo>> driverPumps;
+                    lock (Driver.PumpsLocker)
+                        driverPumps = Driver.Pumps.ToList();
                     foreach (var p in driverPumps)
                     {
                         var state = pump.GetPumpInformation(p.Value.Pump);

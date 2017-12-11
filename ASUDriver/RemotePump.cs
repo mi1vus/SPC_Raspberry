@@ -68,13 +68,13 @@ namespace RemotePump_Driver
         }
         private object busy_flag = new object();
  
-
+        private static object fillingOversLocker = new object();
         private static Dictionary<string,List<OrderInfo>> fillingOvers = new Dictionary<string, List<OrderInfo>>();
         public static void AddFillingOver(OrderInfo Order)
         {
 
             log.Write("AddFillingOver: " + Order.OrderRRN.ToString()+", TID: "+Order.TID);
-            lock (fillingOvers)
+            lock (fillingOversLocker)
             {
                 try
                 {
@@ -145,15 +145,15 @@ namespace RemotePump_Driver
             }
             catch (Exception ex)
             {
-                //MessageBox.Show(ex.Message);
-                log.Write(ex.Message);
+                //MessageBox.Show(ex.ToString());
+                log.Write(ex.ToString(),0,true);
             }
         }
         private string TID;
         public OrderInfo[] GetFillingOvers()
         {
             var ret = new OrderInfo[0];
-            lock (fillingOvers)
+            lock (fillingOversLocker)
             {
                 if (fillingOvers.Count > 0)
                 {
@@ -483,7 +483,7 @@ namespace RemotePump_Driver
             {
                 try
                 {
-                    log.Write("SendCMD: " + Cmd + ", Data: " + Data + ", error: " + ex.Message);
+                    log.Write("SendCMD: " + Cmd + ", Data: " + Data + ", error: " + ex.ToString());
                 }
                 catch { }
             }
@@ -519,13 +519,13 @@ namespace RemotePump_Driver
         public OrderInfo GetDoseInfo(string OrderRRN)
         {
             
-            lock (Driver.TransMemory)
+            lock (Driver.TransMemoryLocker)
             {
                 var trans = (from t in Driver.TransMemory where t.Value.OrderRRN == OrderRRN && t.Value.TID == TID select t.Value).ToArray();
                 if (trans.Length > 0)
                     return trans[0];
             }
-            lock (fillingOvers)
+            lock (fillingOversLocker)
             {
                 return (from t in fillingOvers[TID] where t.OrderRRN == OrderRRN select t).SingleOrDefault();
             }
@@ -551,7 +551,6 @@ namespace RemotePump_Driver
             foreach (var prod in prods)
             {
                 ret.Add(new ProductInformation() { Name = prod.Value.Name, BasePrice = prod.Value.Price, Code = prod.Value.ID});
-
             }
             return ret.ToArray();
         }
@@ -572,11 +571,14 @@ namespace RemotePump_Driver
                     return pumpInformationMem[No].Value;
             }
             //#warning Дописать обработку получения активного топлива
-            if (!Driver.Pumps.ContainsKey(No))
+            lock (Driver.PumpsLocker)
+                if (!Driver.Pumps.ContainsKey(No))
                 return new PumpInformation();
           //  log.Write("GetPumpInformation" + No.ToString());
-            
-            var fuels = Driver.Pumps[No].Fuels;
+
+            Dictionary<string, Driver.FuelInfo> fuels;
+            lock (Driver.PumpsLocker)
+                fuels = Driver.Pumps[No].Fuels;
             
 
           //  main.FuelListItem[] fuels;
@@ -614,7 +616,7 @@ namespace RemotePump_Driver
                     ret.State = PumpState.Filling;
                     if (pump_status.TransID > 0)
                     {
-                        lock (Driver.TransMemory)
+                        lock (Driver.TransMemoryLocker)
                         {
                             ret.TransactionID = Driver.TransMemory.SingleOrDefault(i=>i.Key==pump_status.TransID).Value.OrderRRN??"";
                         }

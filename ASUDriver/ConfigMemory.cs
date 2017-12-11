@@ -374,7 +374,7 @@ namespace ProjectSummer.Repository
         {
             try
             {
-                //System.Windows.Forms.MessageBox.Show(FileName??"null");
+                //System.Windows.Forms.ToString()Box.Show(FileName??"null");
 
                 if ((FileName != null) && (FileName != ""))
                 {
@@ -423,7 +423,7 @@ namespace ProjectSummer.Repository
                 IEnumerable<string> ret = values.Keys.OrderBy(i => i);
                 if (!string.IsNullOrEmpty(Prefix))
                     ret = ret.Where(i => i.StartsWith(Prefix));
-              //  System.Windows.Forms.MessageBox.Show(string.Join("\r\n", ret.ToArray()));
+              //  System.Windows.Forms.ToString()Box.Show(string.Join("\r\n", ret.ToArray()));
                 return ret.ToArray();
             }
 

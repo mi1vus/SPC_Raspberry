@@ -49,7 +49,7 @@ namespace SmartPumpControlRemote
             
             
             
-            //System.Windows.Forms.MessageBox.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+            //System.Windows.Forms.ToString()Box.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.ToString()BoxButtons.OK, System.Windows.Forms.ToString()BoxIcon.Information);
             return "";
         }
         public static void ShowAllToRun(string TID)
@@ -90,7 +90,7 @@ namespace SmartPumpControlRemote
                         if (!GetActions(TID).Contains(ActionName))
                         {
                             Console.WriteLine(string.Format("Действия: \"{0}\" не существует.\r\nВы хотите добавить его?", ActionName));
-                            //if (System.Windows.Forms.MessageBox.Show(string.Format("Действия: \"{0}\" не существует.\r\nВы хотите добавить его?", ActionName), "Добавление действия", System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.No)
+                            //if (System.Windows.Forms.ToString()Box.Show(string.Format("Действия: \"{0}\" не существует.\r\nВы хотите добавить его?", ActionName), "Добавление действия", System.Windows.Forms.ToString()BoxButtons.YesNo, System.Windows.Forms.ToString()BoxIcon.Question) == System.Windows.Forms.DialogResult.No)
                             //    return;
                             SetAction(ActionName, TID);
                         }
@@ -105,7 +105,7 @@ namespace SmartPumpControlRemote
                 catch(Exception ex)
                 {
                     Console.WriteLine(ex);
-                    //System.Windows.Forms.MessageBox.Show("Ошибка при выполннии действия: " + ActionName+"\r\n"+ex.ToString());
+                    //System.Windows.Forms.ToString()Box.Show("Ошибка при выполннии действия: " + ActionName+"\r\n"+ex.ToString());
                 }
             }
         }

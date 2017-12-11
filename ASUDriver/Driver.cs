@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Timers;
 using ProjectSummer.Repository;
 using RemotePump_Driver;
 //using ServioPumpGAS_Driver;
@@ -27,8 +29,9 @@ namespace ASUDriver
             public static object locker = new object();
 
             public static long TransCounter;
+            public static object TransCounterLocker = new object();
 
-            private static long callback_SetDose(RemotePump_Driver.OrderInfo Order)
+            private static long callback_SetDose(OrderInfo Order)
             {
                 lock (locker)
                 {
@@ -80,7 +83,7 @@ namespace ASUDriver
             private static int callback_SQL_Write(string SQL_Request, int retry_count = 5)
             {
                 log.Write(
-"\r\nЗапрос на выполнение скрипта SQL скрипта: " + SQL_Request);
+"\r\nЗапрос на выполнение скрипта SQL скрипта: " + SQL_Request, 2, true);
                 lock (locker)
                 {
                     try
@@ -111,20 +114,20 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 try
                 {
                     log.Write(
-"\r\nЗапрос на выполнение скрипта SQL скрипта: " + SQL_Request);
+"\r\nЗапрос на выполнение скрипта SQL скрипта: " + SQL_Request, 2, true);
                     string result = "";
                     lock (locker)
                     {
 
                         log.Write(
-"\r\nВыполнение SQL скрипта: " + SQL_Request);
+"\r\nВыполнение SQL скрипта: " + SQL_Request, 2, true);
                         for (int z = 0; z < retry_count; z++)
                         {
                             var ptr = callback_SQL_Read_callback?.Invoke(SQL_Request, ctx) ?? IntPtr.Zero;
                             if (ptr != IntPtr.Zero)
                                 result = Marshal.PtrToStringAnsi(ptr);
                             log.Write(
-$"Попытка \"{z + 1}\" результат: {result}");
+$"Попытка \"{z + 1}\" результат: {result}", 2, true);
 
                             if (result != "")
                                 break;
@@ -177,7 +180,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
             #endregion
 
             private static IntPtr ctx;
-            public static Dictionary<long, RemotePump_Driver.OrderInfo> TransMemory = new Dictionary<long, RemotePump_Driver.OrderInfo>();
+            public static object TransMemoryLocker = new object();
+            public static Dictionary<long, OrderInfo> TransMemory = new Dictionary<long, OrderInfo>();
             #endregion
 
             #region Структуры
@@ -311,7 +315,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
             // }
 
-            public static void WriteOrderToIntPtr(RemotePump_Driver.OrderInfo Order, IntPtr ptr)
+            public static void WriteOrderToIntPtr(OrderInfo Order, IntPtr ptr)
             {
                 Marshal.WriteInt32(ptr, 0, Order.PumpNo);
                 Marshal.WriteInt32(ptr, 4, Order.PaymentCode);
@@ -323,7 +327,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 Marshal.WriteIntPtr(ptr, 28, Marshal.StringToHGlobalAnsi(Order.CardNO));
                 Marshal.WriteIntPtr(ptr, 32, Marshal.StringToHGlobalAnsi(Order.OrderRRN));
             }
-            public static void ReadOrderFromIntPtr(RemotePump_Driver.OrderInfo Order, IntPtr ptr)
+            public static void ReadOrderFromIntPtr(OrderInfo Order, IntPtr ptr)
             {
                 Marshal.WriteInt32(ptr, 0, Order.PumpNo);
                 Marshal.WriteInt32(ptr, 4, Order.PaymentCode);
@@ -351,20 +355,29 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 public int Pump;
                 public bool Blocked;
                 public int DispStatus;
-#warning В случае если на ТРК два продукта с одинаковым внешним кодом будет полная хрень!!!
+                public int UpNozzle;
+                #warning В случае если на ТРК два продукта с одинаковым внешним кодом будет полная хрень!!!
                 public Dictionary<string, FuelInfo> Fuels;
+                public DateTime? BlockInitTime;
+                //public void OnBlockTimerEvent(object source, ElapsedEventArgs e)
+                //{
+                //    Console.WriteLine("The Elapsed event was raised at {0}", e.SignalTime);
+                //    this.BlockTimer.Enabled = false;
+                //    this.BlockTimer.Stop();
+                //    this.Blocked = false;
+                //}
             }
 
             public static void CollectOldOrderThread(object Pump)
             {
                 object item = null;
                 var pumpId = (int)Pump;
-                log.Write($"\tCollectOldOrderThread Pump:{Pump}\r\n");
+                log.Write($"\tCollectOldOrderThread Pump:{Pump}\r\n", 1, true);
                 Thread.Sleep(XmlPumpClient.WaitAnswerTimeout);
 
                 bool res;
 
-                lock (XmlPumpClient.Statuses)
+                lock (XmlPumpClient.StatusesLocker)
                     res = XmlPumpClient.Statuses.TryGetValue(
                               new Tuple<int, MESSAGE_TYPES>(pumpId, MESSAGE_TYPES.OnPumpStatusChange), out item)
                           && item != null &&
@@ -374,7 +387,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 {
                     log.Write(XmlPumpClient.Collect(terminal, pumpId, 0, "", XmlPumpClient.WaitAnswerTimeout)
                         ? $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Sucess\r\n"
-                        : $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Fail\r\n");
+                        : $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Fail\r\n", 1, true);
                     //Thread.Sleep(500);
                     //XmlPumpClient.PumpGetStatus(terminal, pumpId, 1);
                     //XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pumpId,
@@ -389,7 +402,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 int cnt = 2;
                 while (cnt > 0)
                 {
-                    lock (TransMemory)
+                    lock (TransMemoryLocker)
                     {
                         if (TransMemory.TryGetValue((long)TransCounter, out order))
                         {
@@ -405,10 +418,9 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 if (cnt <= 0)
                 {
                     log.Write(
-                                $"\t\tERROR!!! WaitCollectThread:\r\n\t\tне найден заказ №{(long)TransCounter}\r\n");
+                                $"\t\tERROR!!! WaitCollectThread:\r\n\t\tне найден заказ №{(long)TransCounter}\r\n", 0, true);
                     return;
                 }
-
                 WaitCollectThread(order);
             }
             public static void WaitCollectBenzuber(object TransactionID)
@@ -419,16 +431,17 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 int cnt = 2;
                 while (cnt > 0)
                 {
-                    lock (Benzuber.ExcangeServer.trans)
+                    lock (Benzuber.ExcangeServer.TransesLocker)
                     {
-                        if (Benzuber.ExcangeServer.trans.TryGetValue((string)TransactionID, out request))
+                        if (Benzuber.ExcangeServer.Transes.TryGetValue((string)TransactionID, out request))
                         {
                             order.PumpNo = request.Pump.Value;
                             order.OrderRRN = request.TransactionID;
+                            order.PumpRRN = request.Shift.DocNum.ToString();
                             order.ProductCode = request.Fuel.Value;
                             order.PaymentCode = 99;
                             order.Amount = request.Amount.Value;
-                            order.Price = Driver.Fuels.First(t => t.Value.ID == request.Fuel.Value).Value.Price;
+                            order.Price = Fuels.First(t => t.Value.ID == request.Fuel.Value).Value.Price;
                             order.Quantity = order.Amount/order.Price;
 
                             break;
@@ -443,7 +456,9 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 if (cnt <= 0)
                 {
                     log.Write(
-                                $"\t\tERROR!!! WaitCollectThreadBenzuber:\r\n\t\tне найден транзакция №{(string)TransactionID}\r\n");
+$@"
+        \t\tERROR!!! WaitCollectThreadBenzuber:
+        \r\n\t\tне найден транзакция №{(string)TransactionID}\r\n", 0, true);
                     return;
                 }
                 WaitCollectThread(order);
@@ -452,109 +467,127 @@ $"Попытка \"{z + 1}\" результат: {result}");
             private static void WaitCollectThread(OrderInfo order)
             {
                 var endMessage = XmlPumpClient.EndFillingEventWait(order.PumpNo, order.OrderRRN);
-
+                long transCounter;
                 if (endMessage == null)
                 {
                     log.Write(
-                        "\t\tERROR!!! WaitCollectThread: нет события окончания налива \r\n" +
-                        $"\t\tPump: {order.PumpNo}\r\n" +
-                        $"\t\tRNN: {order.OrderRRN}\r\n");
+$@"
+        \t\tERROR!!! WaitCollectThread: нет события окончания налива \r\n
+        \t\tPump: {order.PumpNo}\r\n
+        \t\tRNN: {order.OrderRRN}\r\n", 0, true);
+                    
+                }
+                if (!long.TryParse(order.PumpRRN, out transCounter) )
+                {
+                log.Write(
+$@"
+        \t\tERROR!!! \r\n PumpRRN неверный
+        PumpRRN {order.PumpRRN}\r\n", 0, true);
                     return;
                 }
 
                 log.Write(
-                    "WaitCollectThread:FillingOver:\r\n" +
-                    $"TransCounter: {(long)TransCounter}\r\n" +
-                    $"Liters: {(endMessage?.Liters ?? 0) * 10}\r\n" +
-                    $"Money: {endMessage?.Money ?? 0}\r\n");
+$@"WaitCollectThread:FillingOver:\r\n
+TransCounter: {transCounter}\r\n
+Liters: {(endMessage?.Liters ?? 0) * 10}\r\n
+Money: {endMessage?.Money ?? 0}\r\n", 2, true);
 
                 int amount = (int) ((endMessage?.Liters ?? 0)*order.Price);
                 int quantity = (endMessage?.Liters ?? 0)*10;
 
                 //TODO Проба со скидками!!!!
-                FillingOver((long)TransCounter, quantity, amount);
-                Benzuber.ExcangeServer.transOver.Add(order.OrderRRN, new Benzuber.ExcangeServer.Request
+                FillingOver(transCounter, quantity, amount);
+                if (order.PaymentCode == 99)
                 {
-                    TransactionID = order.OrderRRN,
-                    Amount = amount / 100M,
-                    Fuel = order.ProductCode,
-                    Pump = endMessage?.PumpNo
-                });
+                    Benzuber.ExcangeServer.TransOvers.Add(order.OrderRRN, new Benzuber.ExcangeServer.Request
+                    {
+                        TransactionID = order.OrderRRN,
+                        Amount = amount/100M,
+                        Fuel = order.ProductCode,
+                        Pump = endMessage?.PumpNo
+                    });
+                }
                 //FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
 
                 var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
-                var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
+                var fuel = Fuels.First(t => t.Value.ID == order.ProductCode);
                 int allowed = 0;
-                foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
-                {
-                    allowed += 1 << (pumpFuel.Value.ID - 1);
-                }
+                lock (PumpsLocker)
+                    foreach (var pumpFuel in Pumps[order.PumpNo].Fuels)
+                    {
+                        allowed += 1 << (pumpFuel.Value.ID - 1);
+                    }
                 log.Write(
-                    "WaitCollectThread:Collect:\r\n" +
-                    $"terminal: {Driver.terminal}\r\n" +
-                    $"PumpNo: {order.PumpNo}\r\n" +
-                    //$"allowed: {allowed}\r\n" +
-                    $"OrderRRN: {order.OrderRRN}\r\n"
-                    );
+$@"WaitCollectThread:Collect:\r\n
+terminal: {terminal}\r\n
+transCounter: {transCounter}\r\n
+allowed: {allowed}\r\n
+PumpNo: {order.PumpNo}\r\n
+OrderRRN: {order.OrderRRN}\r\n"
+                    , 2, true);
 
-                if (!XmlPumpClient.Collect(Driver.terminal, order.PumpNo, (long)TransCounter, order.OrderRRN, XmlPumpClient.WaitAnswerTimeout))
+
+                if (!XmlPumpClient.Collect(terminal, order.PumpNo, transCounter, order.OrderRRN, XmlPumpClient.WaitAnswerTimeout))
                 {
                     log.Write(
-                        $"\t\tERROR!!! WaitCollectThread:\r\n\t\tнет события ответа на Collect заказа RNN{order.OrderRRN}\r\n");
+$@"
+        \t\tERROR!!! WaitCollectThread:
+        \r\n\t\tнет события ответа на Collect заказа RNN{order.OrderRRN}\r\n", 0, true);
                     return;
                 }
 
                 //TODO Проба со скидками!!!!
-                if (order.PaymentCode == 99)
-                {
-                    XmlPumpClient.SaleDataSale(terminal, order.PumpNo, allowed,
-                        order.Amount, ((decimal)amount) / 100, discount,
-                        order.Quantity, ((decimal)quantity) / 1000, PAYMENT_TYPE.FuelCard,
-                        order.OrderRRN, order.ProductCode, fuel.Key, (int)(order.Price/*fuel.Value.Price*/ * 100), "", 1);
-                    //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
-                    //    order.Amount, order.OverAmount, discount,
-                    //    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
-                    //    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
-                    log.Write(
-                        "WaitCollectThread:SaleDataSale: Benzuber\r\n" +
-                        $"terminal: {terminal}\r\n" +
-                        $"PumpNo: {order.PumpNo}\r\n" +
-                        $"allowed: {allowed}\r\n" +
-                        $"Amount: {order.Amount}\r\n" +
-                        $"OverAmount: {((decimal)amount) / 100}\r\n" +
-                        $"discount: {discount}\r\n" +
-                        $"Quantity: {((decimal)quantity) / 1000}\r\n" +
-                        $"OverQuantity: {order.OverQuantity}\r\n" +
-                        $"PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n" +
-                        $"OrderRRN: {order.OrderRRN}\r\n" +
-                        $"ProductCode: {order.ProductCode}\r\n" +
-                        $"Key: {fuel.Key}\r\n" +
-                        $"fuelPrice: {(int)(order.Price/*fuel.Value.Price*/ * 100)}\r\n"
-                    );
+    //                if (order.PaymentCode == 99)
+    //                {
+    //                    XmlPumpClient.SaleDataSale(terminal, order.PumpNo, allowed,
+    //                        order.Amount, ((decimal)amount) / 100, discount,
+    //                        order.Quantity, ((decimal)quantity) / 1000, PAYMENT_TYPE.FuelCard,
+    //                        order.OrderRRN, order.ProductCode, fuel.Key, (int)(order.Price/*fuel.Value.Price*/ * 100), "", 1);
+    //                    //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
+    //                    //    order.Amount, order.OverAmount, discount,
+    //                    //    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
+    //                    //    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
+    //                    log.Write(
+    //$@"WaitCollectThread:SaleDataSale: Benzuber\r\n
+    //terminal: {terminal}\r\n
+    //PumpNo: {order.PumpNo}\r\n
+    //allowed: {allowed}\r\n
+    //Amount: {order.Amount}\r\n
+    //OverAmount: {((decimal)amount) / 100}\r\n
+    //discount: {discount}\r\n
+    //Quantity: {((decimal)quantity) / 1000}\r\n
+    //OverQuantity: {order.OverQuantity}\r\n
+    //PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
+    //OrderRRN: {order.OrderRRN}\r\n
+    //ProductCode: {order.ProductCode}\r\n
+    //Key: {fuel.Key}\r\n
+    //fuelPrice: {(int)(order.Price/*fuel.Value.Price*/ * 100)}\r\n", 2, true
+    //                    );
 
-                ////XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
-                ////    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
-                ////    (endMessage?.Money ?? 0) / 100m, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
-                ////log.Write($"чек:\r\n" +
-                ////    $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
-                ////    $"GetDocNum: {GetDocNum()}\r\n" +
-                ////    $"GetShiftNum: {GetShiftNum()}\r\n" +
-                ////    $"OverAmount: {(endMessage?.Money ?? 0)/100.0}\r\n" +
-                ////    $"OrderRRN: {order.OrderRRN}\r\n");
+    //                ////XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
+    //                ////    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
+    //                ////    (endMessage?.Money ?? 0) / 100m, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
+    //                ////log.Write($"чек:\r\n" +
+    //                ////    $"GetShiftDocNum: {GetShiftDocNum()}\r\n" +
+    //                ////    $"GetDocNum: {GetDocNum()}\r\n" +
+    //                ////    $"GetShiftNum: {GetShiftNum()}\r\n" +
+    //                ////    $"OverAmount: {(endMessage?.Money ?? 0)/100.0}\r\n" +
+    //                ////    $"OrderRRN: {order.OrderRRN}\r\n");
 
-                //XmlPumpClient.Init(Driver.terminal, order.PumpNo, -order.PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
-                //log.Write("изм. статуса\r\n");
+    //                //XmlPumpClient.Init(Driver.terminal, order.PumpNo, -order.PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
+    //                //log.Write("изм. статуса\r\n");
 
-                ////var res = XmlPumpClient.answers;
-                //var res2 = XmlPumpClient.Statuses;
-                //var res3 = XmlPumpClient.Fillings;
+    //                ////var res = XmlPumpClient.answers;
+    //                //var res2 = XmlPumpClient.Statuses;
+    //                //var res3 = XmlPumpClient.Fillings;
 
-                XmlPumpClient.ClearAllTransactionAnswers(order.PumpNo, order.OrderRRN);
-            }
+    //                XmlPumpClient.ClearAllTransactionAnswers(order.PumpNo, order.OrderRRN);
+    //            }
             }
 
             public static Dictionary<string, FuelInfo> Fuels = new Dictionary<string, FuelInfo>();
 
+            public static object PumpsLocker = new object();
             public static Dictionary<int, PumpInfo> Pumps = new Dictionary<int, PumpInfo>();
             public static bool isInit = false;
             #endregion
@@ -597,97 +630,163 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 catch { }
                 try
                 {
-                    log.Write("");
+                    log.Write("", 1, true);
                     SystemName = _SystemName;
-                    log.Write($"Драйвер открыт. Система управления: \"{SystemName ?? "Нет данных"}\"");
+                    log.Write($"Драйвер открыт. Система управления: \"{SystemName ?? "Нет данных"}\"", 1, true);
 
-                    log.Write("callback_SQL_Write ".PadLeft(37) + ((_callback_SQL_Write == null) ? "is null" : "success set"));
+                    log.Write("callback_SQL_Write ".PadLeft(37) + ((_callback_SQL_Write == null) ? "is null" : "success set"), 1, true);
                     if (_callback_SQL_Write != null) callback_SQL_Write_callback = _callback_SQL_Write;
 
-                    log.Write("callback_SQL_Read ".PadLeft(37) + ((_callback_SQL_Read == null) ? "is null" : "success set"));
+                    log.Write("callback_SQL_Read ".PadLeft(37) + ((_callback_SQL_Read == null) ? "is null" : "success set"), 1, true);
                     if (_callback_SQL_Read != null) callback_SQL_Read_callback = _callback_SQL_Read;
 
 
-                    log.Write("callback_UpdateFillingOver ".PadLeft(37) + ((_callback_UpdateFillingOver == null) ? "is null" : "success set"));
+                    log.Write("callback_UpdateFillingOver ".PadLeft(37) + ((_callback_UpdateFillingOver == null) ? "is null" : "success set"), 1, true);
                     if (_callback_UpdateFillingOver != null) UpdateFillingOver_callback = _callback_UpdateFillingOver;
 
-                    log.Write("callback_InsertCardInfo ".PadLeft(37) + ((_callback_InsertCardInfo == null) ? "is null" : "success set"));
+                    log.Write("callback_InsertCardInfo ".PadLeft(37) + ((_callback_InsertCardInfo == null) ? "is null" : "success set"), 1, true);
                     if (_callback_InsertCardInfo != null) InsertCardInfo_callback = _callback_InsertCardInfo;
 
-                    log.Write("callback_SaveReciept ".PadLeft(37) + ((_callback_SaveReciept == null) ? "is null" : "success set"));
+                    log.Write("callback_SaveReciept ".PadLeft(37) + ((_callback_SaveReciept == null) ? "is null" : "success set"), 1, true);
                     if (_callback_SaveReciept != null) SaveReciept_callback = _callback_SaveReciept;
 
-                    log.Write("callback_SetDose ".PadLeft(37) + ((_callback_SetDose == null) ? "is null" : "success set"));
+                    log.Write("callback_SetDose ".PadLeft(37) + ((_callback_SetDose == null) ? "is null" : "success set"), 1, true);
                     if (_callback_SetDose != null) callback_SetDose_callback = _callback_SetDose;
 
-                    log.Write("callback_GetDose ".PadLeft(37) + ((_callback_GetDose == null) ? "is null" : "success set"));
+                    log.Write("callback_GetDose ".PadLeft(37) + ((_callback_GetDose == null) ? "is null" : "success set"), 1, true);
                     if (_callback_GetDose != null) callback_GetDose_callback = _callback_GetDose;
 
 
 
-                    log.Write("callback_CancelDose ".PadLeft(37) + ((_callback_CancelDose == null) ? "is null" : "success set"));
+                    log.Write("callback_CancelDose ".PadLeft(37) + ((_callback_CancelDose == null) ? "is null" : "success set"), 1, true);
                     if (_callback_CancelDose != null) callback_CancelDose_callback = _callback_CancelDose;
 
-                    log.Write("callback_HoldPump ".PadLeft(37) + ((_callback_HoldPump == null) ? "is null" : "success set"));
+                    log.Write("callback_HoldPump ".PadLeft(37) + ((_callback_HoldPump == null) ? "is null" : "success set"), 1, true);
                     if (_callback_HoldPump != null) callback_HoldPump_callback = _callback_HoldPump;
 
-                    try
-                    {
-                        Params = Serialization.Deserialize<Serialization.SerializableDictionary<string, string>>(Path.Combine("config", "SmartPumpControlParams.xml"));
-                    }
-                    catch
-                    {
-                    }
-                    if (Params == null)
-                        Params = new Serialization.SerializableDictionary<string, string>();
-                    log.Write("ctx " + (((ctx == null) || (ctx == IntPtr.Zero)) ? "is null" : "success set"));
-                    Driver.ctx = ctx;
-                    if (!isInit)
-                    {
-                        try
-                        {
-                            isInit = true;
-                            int pt;
-                            if (!Params.ContainsKey("port") || !int.TryParse(Params["port"], out pt))
-                                pt = port;
-                            int t;
-                            if (Params.ContainsKey("SendTimeout") && int.TryParse(Params["SendTimeout"], out t))
-                                XmlPumpClient.SendTimeout = t;
-                            else
-                                XmlPumpClient.SendTimeout = 1500;
-
-                            if (Params.ContainsKey("WaitAnswerTimeout") && int.TryParse(Params["WaitAnswerTimeout"], out t))
-                                XmlPumpClient.WaitAnswerTimeout = t;
-                            else
-                                XmlPumpClient.WaitAnswerTimeout = 3500;
-
-                            RemotePump_Driver.RemotePump.StartServer();
-                            XmlPumpClient.StartSocket(hostB2, pt, terminal);
-                            XmlPumpClient.InitData(Driver.terminal);
-                            log.Write($"Open port: {pt} SendTimeout: {XmlPumpClient.SendTimeout} WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}");
-                        }
-                        catch { isInit = false; }
-                    }
                     return 1;
                 }
                 catch (Exception ex)
                 {
-                    log.Write("Ошибка при открытии драйвера. " + ex.Message);
+                    log.Write("Ошибка при открытии драйвера. " + ex.ToString(), 0, true);
                     return 0;
                 }
 
             }
             //static TestWindow window;
+            public static void InitXmlClient()
+            {
+                try
+                {
+                    Params =
+                        Serialization.Deserialize<Serialization.SerializableDictionary<string, string>>(
+                            Path.Combine("config", "SmartPumpControlParams.xml"));
+                }
+                catch (Exception ex)
+                {
+                    log.Write($"Файл конфигурации SmartPumpControlParams.xml не найден: {ex}", 0, true);
+                }
+
+                if (Params == null)
+                        Params = new Serialization.SerializableDictionary<string, string>();
+
+                log.Write("ctx point in driver " + (ctx == IntPtr.Zero ? "is null" : "success set"), 2, true);
+                if (!isInit)
+                {
+                    try
+                    {
+                        isInit = true;
+                        int pt;
+                        if (!Params.ContainsKey("port") || !int.TryParse(Params["port"], out pt))
+                            pt = port;
+                        int t;
+                        if (Params.ContainsKey("SendTimeout") && int.TryParse(Params["SendTimeout"], out t))
+                            XmlPumpClient.SendTimeout = t;
+                        else
+                            XmlPumpClient.SendTimeout = 1500;
+
+                        if (Params.ContainsKey("WaitAnswerTimeout") && int.TryParse(Params["WaitAnswerTimeout"], out t))
+                            XmlPumpClient.WaitAnswerTimeout = t;
+                        else
+                            XmlPumpClient.WaitAnswerTimeout = 3500;
+
+                        if (Params.ContainsKey("LogLevel") && int.TryParse(Params["LogLevel"], out t))
+                        {
+                            log.LogLevel = t;
+                            XmlPumpClient.ExchangeLogLevel = t;
+                            //Benzuber.ExcangeServer.logBenzuber.LogLevel = t;
+                        }
+
+                        if (Params.ContainsKey("UnblockingTimeoutMin") && int.TryParse(Params["UnblockingTimeoutMin"], out t))
+                        {
+                            XmlPumpClient.UnblockingTimeoutMin = t;
+                            //Benzuber.ExcangeServer.logBenzuber.LogLevel = t;
+                        }
+
+                    //RemotePump_Driver.RemotePump.StartServer();
+                    XmlPumpClient.StartSocket(hostB2, pt, terminal);
+                        XmlPumpClient.InitData(terminal);
+                        log.Write(
+$@"XmlPumpClient Open port: {pt}{Environment.NewLine}
+SendTimeout: {XmlPumpClient.SendTimeout} {Environment.NewLine}
+WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}{Environment.NewLine}
+LogLevel: {log.LogLevel}{Environment.NewLine}
+UnblockingTimeoutMin: {XmlPumpClient.UnblockingTimeoutMin}{Environment.NewLine}", 0, true);
+
+                        //else
+                        //{
+                        //    Driver.log.Write(Driver.Description() + "\r\n");
+                        //}
+
+                        //int OS = Environment.OSVersion.Version.Major;
+                        //Driver.log.Write("OS Ver - " + Environment.OSVersion.Version + "\r\n");
+                        //if (OS > 4)
+                        FuelPrices();
+                        //else
+                        //    Driver.FuelPrices();
+
+                        //if (OS > 4)
+                        PumpFuels();
+                        //else
+                        //    Driver.PumpFuels("1=95.92.80;2=95.92.80;3=95.92;4=95.92");
+
+
+                        object res;
+                        if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit), out res))
+                        {
+                            log.Write(
+                                Description() + " успешно открыта!\r\n", 0, true);
+
+                            XmlPumpClient.pump_status_update_background_th.Start();
+                        }
+                        else
+                        {
+                            log.Write(
+                                Description() + " нет ответа!\r\n", 0, true);
+                        }
+
+                }
+                    catch (Exception ex)
+                    {
+                        log.Write($"Ошибка инициализации библиотеки {Description()}:{ex}\r\n", 0, true);
+                    }
+            }
+        }
 
             public static void StartBenzuber()
             {
-                if (ConfigMemory.GetConfigMemory("Benzuber")["enable"] == "true")
+                var enable = ConfigMemory.GetConfigMemory("Benzuber");
+                foreach (var r in enable.GetValueNames())
                 {
-                    ASUDriver.Benzuber.ExcangeServer.StartClient();
-                    //Excange.StartClient();
-                    log.Write("Стартуем BenzuberServer:", 0, true);
+                    Driver.log.Write($@"[{r}]:{enable[r]}", 3, true);
                 }
-                else log.Write("BenzuberServer отключен", 0, true);
+                if (string.Compare(enable["enable"], "1", StringComparison.InvariantCultureIgnoreCase) != 0)
+                {
+                    log.Write("BenzuberServer отключен", 0, true);
+                    return;
+                }
+                log.Write("Стартуем BenzuberServer:", 0, true);
+                Benzuber.ExcangeServer.StartClient();
             }
 
         /// <summary>
@@ -720,8 +819,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
             public static void Close()
             {
                 XmlPumpClient.Disconnect();
-                log.Write("");
-                log.Write("Driver close");
+                
+                log.Write("Driver close", 0, true);
                 //try
                 //{
                 //    if (window != null && window.Visible)
@@ -753,26 +852,28 @@ $"Попытка \"{z + 1}\" результат: {result}");
             {
                 try
                 {
-                    lock (TransMemory)
+                    lock (TransMemoryLocker)
                     {
-                        log.Write("");
-                        log.Write(string.Format("Налив окончен: Номер транзакции АСУ = {0}, Кол-во = {1}, Amount = {2}", TransNum, Quantity, Amount));
+                        
+                        log.Write(
+                            $"Налив окончен: Номер транзакции АСУ = {TransNum}, Кол-во = {Quantity}, Amount = {Amount}", 1, true);
                         if (TransMemory.ContainsKey(TransNum))
                         {
-                            log.Write("Транзакция найдена");
+                            log.Write("Транзакция найдена", 2, true);
                             var order = TransMemory[TransNum];
                             order.OverAmount = ((decimal)Amount) / 100;
                             order.OverQuantity = ((decimal)Quantity) / 1000;
                             order.PumpRRN = TransNum.ToString();
 
-                            log.Write(string.Format("Транзакция отправлена: Номер транзакции АСУ = {0}, Кол-во = {1}, Amount = {2}", order.PumpRRN, order.OverQuantity, order.OverAmount));
+                            log.Write(
+                                $"Транзакция отправлена: Номер транзакции АСУ = {order.PumpRRN}, Кол-во = {order.OverQuantity}, Amount = {order.OverAmount}", 2, true);
 
-                            RemotePump_Driver.RemotePump.AddFillingOver(order);
+                            RemotePump.AddFillingOver(order);
 
 #warning Если возникнут проблеммы убрать
                             TransMemory.Remove(TransNum);
                             log.Write(
-                                $"\t\tFillingOver:\r\n\t\tудаление заказа №{TransNum}\r\n");
+                                $"\t\tFillingOver:\r\n\t\tудаление заказа №{TransNum}\r\n", 2, true);
                         }
                     }
 
@@ -783,7 +884,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 }
                 catch (Exception ex)
                 {
-                    log.Write("Ошибка подтверждения налива топлива. " + ex.Message);
+                    log.Write("Ошибка подтверждения налива топлива. " + ex.ToString(), 0, true);
                 }
             }
 
@@ -829,7 +930,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 {
                     Serialization.Serialize(Params, "SmartPumpControlParams.xml");
                 }
-                catch (Exception ex) {log.Write(ex.Message); }
+                catch (Exception ex) {log.Write(ex.ToString(), 0, true); }
             }
 
             /// <summary>
@@ -838,8 +939,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
             [Obfuscation()]
             public static void CloseShift()
             {
-                log.Write("");
-                log.Write("Закрытие смены");
+                
+                log.Write("Закрытие смены", 0, true);
                 var tids = SmartPumpControlRemote.Shell.GetTIDS();
                 foreach (var tid in tids)
                 {
@@ -858,8 +959,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
             [Obfuscation()]
             public static void Service()
             {
-                log.Write("");
-                log.Write("Service");
+                
+                log.Write("Service", 0, true);
                 //var dialog = new SmartPumpControlRemote.QuickLaunch();
                 //if (dialog.tid != "") dialog.ShowDialog();
             }
@@ -871,8 +972,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
             public static void Settings()
             {
                 //                    log.Write(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                log.Write("");
-                log.Write("Settings");
+                
+                log.Write("Settings", 0, true);
                 //new SmartPumpControlRemote.Settings().ShowDialog();
             }
 
@@ -885,14 +986,14 @@ $"Попытка \"{z + 1}\" результат: {result}");
             [Obfuscation()]
             public static void FuelPrices()
             {
-                log.Write("");
+                
                 log.Write("Установка цен: " + Fuels, 0, true);
                 //lock(XmlPumpClient.answers)
                 try
                 {
-                    log.Write("Очистка памяти цен.");
-                    Driver.Fuels.Clear();
-                    log.Write("Формирование списка доступных продуктов");
+                    log.Write("Очистка памяти цен.", 2, true);
+                    Fuels.Clear();
+                    log.Write("Формирование списка доступных продуктов", 2, true);
 
                     object item;
 
@@ -912,7 +1013,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         {
                             var tmp = new FuelInfo() { ID = price.GradeId, Name = price.GradeName, Price = (decimal)price.Price / 100, InternalCode = price.GradeId };
                             log.Write("Add Fuel: " + tmp.ToString(), 0, true);
-                            Driver.Fuels.Add(price.GradeName, tmp);
+                            Fuels.Add(price.GradeName, tmp);
                         }
                     }
                 }
@@ -946,12 +1047,12 @@ $"Попытка \"{z + 1}\" результат: {result}");
             {
                 try
                 {
-                    log.Write(string.Format("GetTransaction(long ID = {0},  IntPtr Result):\r\n", ID));
-                    lock (TransMemory)
+                    log.Write($"GetTransaction(long ID = {ID},  IntPtr Result):\r\n", 0, true);
+                    lock (TransMemoryLocker)
                     {
                         if (TransMemory.ContainsKey(ID))
                         {
-                            log.Write("Транзакция найдена");
+                            log.Write("Транзакция найдена", 2, true);
                             //   Marshal.StructureToPtr(TransMemory[ID], Result, true);
                             WriteOrderToIntPtr(TransMemory[ID], Result);
                             //TransMemory[ID].WriteToIntPtr(Result);
@@ -959,7 +1060,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         }
                         else
                         {
-                            log.Write("Транзакция не найдена");
+                            log.Write("Транзакция не найдена", 2, true);
                             foreach (var key in TransMemory.Keys)
                                 log.Write(key.ToString());
                         }
@@ -967,7 +1068,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 }
                 catch (Exception ex)
                 {
-                    log.Write(string.Format("GetTransaction(long ID = {0},  IntPtr Result):\r\n", ID) + ex.ToString());
+                    log.Write($"GetTransaction(long ID = {ID},  IntPtr Result):\r\n" + ex, 0, true);
                 }
                 return 0;
 
@@ -977,12 +1078,12 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 TransactionInfo result = new TransactionInfo();
                 try
                 {
-                    log.Write(string.Format("GetTransactionInfo(long ID = {0}):\r\n", ID));
-                    lock (TransMemory)
+                    log.Write($"GetTransactionInfo(long ID = {ID}):\r\n", 0, true);
+                    lock (TransMemoryLocker)
                     {
                         if (TransMemory.ContainsKey(ID))
                         {
-                            log.Write("Транзакция найдена");
+                            log.Write("Транзакция найдена", 2, true);
                             //   Marshal.StructureToPtr(TransMemory[ID], Result, true);
                             //ReadOrderFromIntPtr(TransMemory[ID], Result);
 
@@ -1001,7 +1102,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         }
                         else
                         {
-                            log.Write("Транзакция не найдена");
+                            log.Write("Транзакция не найдена", 2, true);
                             foreach (var key in TransMemory.Keys)
                                 log.Write(key.ToString());
                         }
@@ -1009,7 +1110,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 }
                 catch (Exception ex)
                 {
-                    log.Write(string.Format("GetTransaction(long ID = {0},  IntPtr Result):\r\n", ID) + ex.ToString());
+                    log.Write($"GetTransaction(long ID = {ID},  IntPtr Result):\r\n" + ex, 0, true);
                 }
                 return null;
 
@@ -1028,13 +1129,14 @@ $"Попытка \"{z + 1}\" результат: {result}");
             public static void PumpFuels()
             {
                 //"1=95.92.80;2=95.92.80;3=95.92;4=95.92"
-                log.Write("");
-                log.Write("Установка продуктов, доступных на ТРК.",0,true);
+                
+                log.Write("Установка продуктов, доступных на ТРК.", 0, true);
                 //lock (XmlPumpClient.answers)
                 try
                 {
                     object item;
-                    Pumps.Clear();
+                    lock (PumpsLocker)
+                        Pumps.Clear();
                     if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                         MESSAGE_TYPES.OnDataInit), out item) || item == null)
                     {
@@ -1046,26 +1148,40 @@ $"Попытка \"{z + 1}\" результат: {result}");
                         OnDataInit onDataInit = (OnDataInit)item;
                         foreach (var pump in onDataInit.Pumps)
                         {
-                            log.Write($"ТРК[{pump.PumpId}]\r\n");
+                            log.Write($"ТРК[{pump.PumpId}]\r\n", 2, true);
 
-                            XmlPumpClient.PumpGetStatus(Driver.terminal, pump.PumpId, 1);
+                            XmlPumpClient.PumpGetStatus(terminal, pump.PumpId, 1);
 
                             OnPumpStatusChange оnPumpStatusChanged = null;
 
                             if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pump.PumpId, MESSAGE_TYPES.OnPumpStatusChange), out item)
                                     && item != null && ((OnPumpStatusChange)item)?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                             {
-                                log.Write("\tстатус WAITING_COLLECTING\r\n");
+                                log.Write("\tстатус WAITING_COLLECTING\r\n", 2, true);
                                 XmlPumpClient.Collect(terminal, pump.PumpId, 0, "", XmlPumpClient.WaitAnswerTimeout);
                                 //Thread.Sleep(500);
-                                XmlPumpClient.PumpGetStatus(Driver.terminal, pump.PumpId, 1);
+                                XmlPumpClient.PumpGetStatus(terminal, pump.PumpId, 1);
                                 XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pump.PumpId,
                                     MESSAGE_TYPES.OnPumpStatusChange), out item);
                             }
 
                             оnPumpStatusChanged = (OnPumpStatusChange)item;
 
-                            Pumps.Add(pump.PumpId, new PumpInfo() { Pump = pump.PumpId, Blocked = (оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE && оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION), Fuels = new Dictionary<string, FuelInfo>() });
+                            var pmp = new PumpInfo()
+                            {
+                                Pump = pump.PumpId,
+                                Blocked =
+                                (оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_IDLE &&
+                                 оnPumpStatusChanged?.StatusObj != PUMP_STATUS.PUMP_STATUS_WAITING_AUTHORIZATION),
+                                Fuels = new Dictionary<string, FuelInfo>(),
+                                //BlockTimer = new System.Timers.Timer(15000 /*900000*/)
+                                BlockInitTime = null
+                            };
+                            //pmp.BlockTimer.Elapsed += pmp.OnBlockTimerEvent;
+                            //pmp. BlockTimer.AutoReset = false;
+                            //pmp.BlockTimer. = pmp;
+                            lock (PumpsLocker)
+                                Pumps.Add(pump.PumpId, pmp);
                             foreach (var nozzle in pump.Nozzles)
                             {
                                 if (оnPumpStatusChanged == null || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))
@@ -1073,7 +1189,8 @@ $"Попытка \"{z + 1}\" результат: {result}");
 
                                 var fuel = Fuels.First(t => t.Value.ID == nozzle.GradeId);
                                 log.Write($"\tПродукт: {fuel.Key}\r\n", 0, true);
-                                Pumps[pump.PumpId].Fuels.Add(fuel.Key, fuel.Value);
+                                lock (PumpsLocker)
+                                    Pumps[pump.PumpId].Fuels.Add(fuel.Key, fuel.Value);
                             }
                         }
                     }
@@ -1116,7 +1233,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 //dialog.Text = "Параметры \"" + Name + "\"";
                 //if (dialog.ShowDialog() == DialogResult.OK)
                 //{
-                //    //System.Windows.Forms.MessageBox.Show(Name + " Setup");
+                //    //System.Windows.Forms.ToString()Box.Show(Name + " Setup");
                 //    if (!dialog.Value.Contains("://"))
                 //        dialog.Value = "net.tcp://" + dialog.Value + ":1120";
                 //    config["ip"] = dialog.Value;
@@ -1171,8 +1288,11 @@ $"Попытка \"{z + 1}\" результат: {result}");
                             result = (byte)(proxy.RunCommand(config["name"], "Z - отчет (Без печати)", null) ? 1 : 0);
                         }
                         catch { }
-                        var message = "Не удалось закрыть смену закрыть смену на фискальном\r\nрегистраторе: \"" + Name + "\"\r\nПовторить попытку закрытия смены?";
-                        log.Write(message);
+                        var message = 
+                        $@"Не удалось закрыть смену закрыть смену на фискальном
+                        \r\nрегистраторе: { Name }
+                        \r\nПовторить попытку закрытия смены?";
+                        log.Write(message, 1, true);
                     if (result == 0 /*&& MessageBox.Show(message, "Закрытие смены на ККМ", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No*/)
                             break;
                     }
@@ -1206,7 +1326,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 catch { }
 
                 if (result == 0)
-                log.Write($"Не удалось выполнить операцию {operation}");
+                log.Write($"Не удалось выполнить операцию {operation}", 0, true);
 
                 return (byte)result;
             }
@@ -1228,7 +1348,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 catch { }
 
                 if (result == 0)
-                log.Write($"Не удалось выполнить операцию {operation}");
+                log.Write($"Не удалось выполнить операцию {operation}", 0, true);
 
             return (byte)result;
             }
@@ -1236,7 +1356,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
             static public byte PrintCheck([MarshalAs(UnmanagedType.BStr)]string Name, [MarshalAs(UnmanagedType.BStr)]string Text, int CheckKind, int PayKind, double Amount)
             {
                 log.Write(
-                    $"Печать чека. {Name}, {CheckKind}, {PayKind}, {Amount}");
+                    $"Печать чека. {Name}, {CheckKind}, {PayKind}, {Amount}", 0, true);
                 var config = ConfigMemory.GetConfigMemory(Name);
                 var result = 0;
                 try
@@ -1270,7 +1390,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 {
                 }
                 if (result == 0)
-                    log.Write("Не удалось напечатать чек на ККМ: " + config["serial"] + "Печать чека");
+                    log.Write("Не удалось напечатать чек на ККМ: " + config["serial"] + "Печать чека", 0, true);
                 return (byte)result;
             }
 
@@ -1285,7 +1405,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
             /// <returns>
             /// Номер транзакции в системе управления (TransID), в случае ошибки -1;
             /// </returns>
-            public delegate long SetDose_Delegate(RemotePump_Driver.OrderInfo Order, IntPtr ctx);
+            public delegate long SetDose_Delegate(OrderInfo Order, IntPtr ctx);
 
             /// <summary>
             /// Получить состояние ТРК
@@ -1450,7 +1570,7 @@ $"Попытка \"{z + 1}\" результат: {result}");
                 try
                 {
                     log.Write(
-                        $"Сброс дозы. RRN: {RRN}");
+                        $"Сброс дозы. RRN: {RRN}", 0, true);
 
                     long TransID = -1;
                     var tm = TransMemory.ToArray();
@@ -1461,50 +1581,56 @@ $"Попытка \"{z + 1}\" результат: {result}");
                     if (TransID > 0)
                     {
                         log.Write(
-                            $"Найдена транзакция. RRN: {RRN}, TransID: {TransID}");
+                            $"Найдена транзакция. RRN: {RRN}, TransID: {TransID}", 2, true);
 
                         return callback_CancelDose(TransID) == 1;
                     }
                     else
                         log.Write(
-                            $"Транзакция не найдена. RRN: {RRN}");
+                            $"Транзакция не найдена. RRN: {RRN}", 0, true);
                 }
-                catch { log.Write("error: CancelDose" + RRN); }
+                catch { log.Write("error: CancelDose" + RRN, 0, true); }
 
                 return false;
             }
 
-            public static long SetDose(RemotePump_Driver.OrderInfo Order)
+            public static long SetDose(OrderInfo Order)
             {
-                //int Pump, int Fuel, bool OrderInMoney, decimal Quantity, decimal Price, decimal Amount, int CardType, string CardNum, string RRN
-                log.Write(string.Format("Установка дозы на ТРК: {0}, продукт: {1}, заказ в деньгах: {2}, кол-во: {3}, сумма: {4}, номер карты: {5}",
-Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, Order.CardNO));
+            //int Pump, int Fuel, bool OrderInMoney, decimal Quantity, decimal Price, decimal Amount, int CardType, string CardNum, string RRN
+            log.Write(
+$@"Установка дозы на ТРК: {Order.PumpNo}", 0, true);
+            log.Write(
+$@"продукт: {Order.ProductCode}, 
+заказ в деньгах: {Order.OrderMode}, 
+кол-во: {Order.Quantity}, 
+сумма: {Order.Amount}, 
+номер карты: {Order.CardNO}", 2, true);
 
                 var trans_id = callback_SetDose(Order);
-                log.Write("Ответ АСУ: trans_id = " + trans_id);
+                log.Write("Ответ АСУ: trans_id = " + trans_id, 2, true);
                 log.Write(
-                    $"\t\tSetDose:\r\n\t\tОтвет АСУ: trans_id = {trans_id}\r\n");
+                    $"\t\tSetDose:\r\n\t\tОтвет АСУ: trans_id = {trans_id}\r\n", 2, true);
 
                 if (trans_id > 0)
                 {
-                    lock (TransMemory)
+                    lock (TransMemoryLocker)
                     {
                         if (TransMemory.ContainsKey(trans_id))
                         {
                             TransMemory.Remove(trans_id);
                             log.Write(
-                                $"\t\tSetDose:\r\n\t\tудаление заказа №{trans_id}\r\n");
+                                $"\t\tSetDose:\r\n\t\tудаление заказа №{trans_id}\r\n", 2, true);
                         }
 #warning Если будут сбойные ситуации - убрать
                         Order.PumpRRN = trans_id.ToString();
                         /*********************************************/
                         TransMemory.Add(trans_id, Order);
                         log.Write(
-                            $"\t\tSetDose:\r\n\t\tдобавление заказа №{trans_id}\r\n");
+                            $"\t\tSetDose:\r\n\t\tдобавление заказа №{trans_id}\r\n", 2, true);
                     }
                 }
                 else
-                    log.Write("Ошибка при задании дозы на ТРК. callback_SetDose = null");
+                    log.Write("Ошибка при задании дозы на ТРК. callback_SetDose = null", 0, true);
                 return trans_id;
             }
             public static GetPumpStateResponce GetDose(long Pump)
@@ -1575,7 +1701,7 @@ Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, 
                                 {
                                     if (test_values(Price, db_price, 2) && test_values(Amount, db_amount, 2) && test_values(DiscountMoney, db_dicsount, 2))
                                     {
-                                        log.Write($"Таблица {Table} обновленна успешно");
+                                        log.Write($"Таблица {Table} обновленна успешно", 2, true);
                                         return true;
                                     }
                                 }
@@ -1584,11 +1710,11 @@ Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, 
                     }
                     catch (Exception ex)
                     {
-                        log.Write($"Ошибка при выполнении пересчета заказа: {ex}");
+                        log.Write($"Ошибка при выполнении пересчета заказа: {ex}", 0, true);
                     }
                     Thread.Sleep(1000);
                 }
-                log.Write($"Не удалось обновить таблицу {Table}.");
+                log.Write($"Не удалось обновить таблицу {Table}.", 0, true);
                 return false;
             }
             private static bool test_values(decimal v1, decimal v2, int decimals) => Math.Round(v1, decimals) == Math.Round(v2, decimals);
@@ -1598,7 +1724,7 @@ Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, 
                 {
                     try
                     {
-                        log.Write($"Сохранение информации о карте: {_DateTime.ToString()}, {CardNo}, {CardType}, {Trans_ID}");
+                        log.Write($"Сохранение информации о карте: {_DateTime.ToString()}, {CardNo}, {CardType}, {Trans_ID}", 2, true);
                         lock (locker)
                             InsertCardInfo_callback.Invoke(BitConverter.DoubleToInt64Bits(_DateTime.ToOADate()), CardNo, CardType, Trans_ID, ctx);
                     }
@@ -1644,7 +1770,7 @@ Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, 
                     var tmp = callback_SQL_Read($"select * from docs where host = '{DeviceName}' and datetime = '{_DateTime.ToString("dd.MM.yyyy HH:mm:ss")}' and serno = '{DeviceSerial}' and docnum = { DocNo.ToString()} and doctype = {DocType.ToString()}");
                     if (tmp?.Count() > 0)
                     {
-                        log.Write("Данный чек бы сохранен ранее:" + tmp[0] ?? " нет");
+                        log.Write("Данный чек бы сохранен ранее:" + tmp[0] ?? " нет", 2, true);
                         result = true;
                     }
                     #endregion
@@ -1690,12 +1816,12 @@ Order.PumpNo, Order.ProductCode, Order.OrderMode, Order.Quantity, Order.Amount, 
                         {
                             for (int z = 0; z < 5; z++)
                             {
-                                log.Write("Сохранение товарной позиции. Попытка: " + (z + 1).ToString());
+                                log.Write("Сохранение товарной позиции. Попытка: " + (z + 1).ToString(), 2, true);
                                 Thread.Sleep(1000);
                                 tmp = callback_SQL_Read($"select * from doc_items where host = '{DeviceName}' and datetime = '{_DateTime.ToString("dd.MM.yyyy HH:mm:ss")}' and serno = '{DeviceSerial}' and docnum = { DocNo.ToString()} and ITEM = {internal_code} and itemkind = 2 and itemno = 1");
                                 if (tmp?.Count() > 0)
                                 {
-                                    log.Write("Данная позиция чека была сохранена ранее:" + tmp[0] ?? "нет");
+                                    log.Write("Данная позиция чека была сохранена ранее:" + tmp[0] ?? "нет", 2, true);
                                     result = true;
                                     //break;
                                 }
