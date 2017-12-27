@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
 using ProjectSummer.Repository;
@@ -153,26 +154,31 @@ namespace ASUDriver
             pump.FillingOverEvent += Pump_FillingOverEvent;
         }
 
-        private static void Pump_FillingOverEvent(object sender, RemotePump_Driver.RemotePump.FillingOverEventArgs e)
+        private static void Pump_FillingOverEventThreadTask()
         {
-            log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
-
-            new Task(() =>
-            {
                 var data = pump.GetFillingOvers();
+            Driver.log.Write($@"      Pump_FillingOverEvent data: [{data.Length}]", 2, true);
+            foreach (var over in data)
+                {
+                    Driver.log.Write($@"      Pump_FillingOverEvent: [{over}]", 2, true);
+                }
                 lock (proxy)
                 {
                     foreach (var d in data)
                     {
                         try
                         {
+                            Driver.log.Write(
+                            $"\t\rproxy.FillingOver:\r\n\t\tOrderRRN: {d.OrderRRN} OverAmount: {d.OverAmount}\r\n", 2, true);
                             proxy.FillingOver(d.OrderRRN, d.OverAmount);
                         }
                         catch (Exception ex)
                         {
                             log.Write("Ошибка при выплнении подтверждения налива" + ex.ToString());
+                            Driver.log.Write("Ошибка при выплнении подтверждения налива" + ex.ToString());
                             unReciverOrders.Add(d);
                             log.Write($"Не удалось подтвердить налив RNN: {d.OrderRRN}, Факт. Сумма: {d.OverAmount}");
+                            Driver.log.Write($"Не удалось подтвердить налив RNN: {d.OrderRRN}, Факт. Сумма: {d.OverAmount}");
                         }
                     }
                     data = unReciverOrders.ToArray();
@@ -181,16 +187,26 @@ namespace ASUDriver
                         try
                         {
                             log.Write($"Повторная передача подтверждения налива RNN: {d.OrderRRN}, Факт. Сумма: {d.OverAmount}");
+                            Driver.log.Write($"Повторная передача подтверждения налива RNN: {d.OrderRRN}, Факт. Сумма: {d.OverAmount}");
                             proxy.FillingOver(d.OrderRRN, d.OverAmount);
                             unReciverOrders.Remove(d);
                         }
                         catch (Exception ex)
                         {
                             log.Write("Ошибка при выплнении подтверждения налива" + ex.ToString());
+                            Driver.log.Write("Ошибка при выплнении подтверждения налива" + ex.ToString());
                         }
                     }
                 }
-            }).Start();
+            }
+        public static Thread Pump_FillingOverEvent_background_th = new Thread(Pump_FillingOverEventThreadTask)
+        { IsBackground = true };
+        private static void Pump_FillingOverEvent(object sender, RemotePump_Driver.RemotePump.FillingOverEventArgs e)
+        {
+            log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
+            Driver.log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
+
+            Pump_FillingOverEvent_background_th.Start();
         }
         private static List<RemotePump_Driver.OrderInfo> unReciverOrders = new List<RemotePump_Driver.OrderInfo>();
 

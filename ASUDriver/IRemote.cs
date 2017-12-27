@@ -11,6 +11,7 @@ namespace RemoteService
     {
         [OperationContract]
         DeviceInfo[] GetDevices();
+
         [OperationContract]
         bool RunCommand(string DeviceName, string Command, Dictionary<string, string> Parameters);
         [OperationContract]

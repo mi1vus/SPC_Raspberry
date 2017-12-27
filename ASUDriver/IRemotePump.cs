@@ -3,7 +3,8 @@
 //using ServioPump_2._34_Driver;
 
 namespace RemotePump_Driver
-{    
+{
+    //[MessageContract]
     public struct PumpInformation
     {
         /// <summary>
@@ -173,6 +174,31 @@ namespace RemotePump_Driver
         /// </summary>
         public decimal PreCalcedFillingOver_Price { get; set; }
 
+        public override string ToString()
+        {
+            return
+$@"
+TID: {TID}
+PumpNo: {PumpNo}
+OrderRRN: {OrderRRN}
+CardNO: {CardNO}
+Amount: {Amount}
+Price: {Price}
+Quantity: {Quantity}
+OverAmount: {OverAmount}
+OverQuantity: {OverQuantity}
+PaymentCode: {PaymentCode}
+ProductCode: {ProductCode}
+OrderMode: {OrderMode}
+FillingOver: {FillingOver}
+BasePrice: {BasePrice}
+PumpRRN: {PumpRRN}
+DiscontCardNO: {DiscontCardNO}
+DiscontCardType: {DiscontCardType}
+PreCalcedFillingOver_Amount: {PreCalcedFillingOver_Amount}
+PreCalcedFillingOver_Discount: {PreCalcedFillingOver_Discount}
+PreCalcedFillingOver_Price: {PreCalcedFillingOver_Price}";
+        }
     }
     
 

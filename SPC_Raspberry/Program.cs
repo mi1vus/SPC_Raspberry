@@ -1,42 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using ASUDriver;
 using ProjectSummer.Repository;
 using RemotePump_Driver;
 
-//using ASUDriver;
-//using RemotePump_Driver;
-
 namespace SPC_Raspberry
 {
     static class Program
     {
-        //public static void Driver.log.Write(string txt, bool toConsole)
-        //{
-        //        //Logger.Text += txt;
-        //        //Driver.log.Write(txt);
-        //        Driver.log.Write(txt,0, toConsole);
-        //    //Console.WriteLine($"{DateTime.Now.ToString("u")} - {txt}");
-        //    //return;
-        //    //string path = @"app_log.log";
-        //    //// This text is added only once to the file.
-        //    //if (!File.Exists(path))
-        //    //{
-        //    //    // Create a file to write to.
-        //    //    using (StreamWriter sw = File.CreateText(path))
-        //    //    {
-        //    //        sw.WriteLine(txt);
-        //    //    }
-        //    //}
-        //    //else using (StreamWriter sw = File.AppendText(path))
-        //    //    {
-        //    //        sw.WriteLine(txt);
-        //    //    }
-        //}
-
         public static void OpenDriver()
         {
             try
@@ -161,7 +134,7 @@ $@"Presale:\r\n
                             //    Driver.TransMemory[(long) transCounter] = Order;
                             //}
 
-                        Thread myThread2 = new Thread(Driver.WaitCollect) {IsBackground = true};
+                        Thread myThread2 = new Thread(Driver.WaitCollectProxy) {IsBackground = true};
                         myThread2.Start(transCounter); // запускаем поток
 
                             //XmlPumpClient.PumpRequestAuthorize(Driver.terminal, Order.PumpNo, transCounter,
@@ -277,8 +250,9 @@ $@"Presale:\r\n
                                                     //FillingVolume - данные дисплея ТРК сумма.
                                                     resp.FillingSum = 0;
 
-                                                IntPtr respPtr = Marshal.AllocCoTaskMem(Marshal.SizeOf(resp));
-                                                Marshal.StructureToPtr(resp, respPtr, false);
+                                                //var t = Marshal.SizeOf(Driver.GetPumpStateResponce);
+                                                //IntPtr respPtr = Marshal.AllocCoTaskMem(t);
+                                                //Marshal.StructureToPtr(resp, respPtr, false);
 
                                                 //Driver.log.Write("return", 0, false);
 
@@ -689,72 +663,22 @@ OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", 2, true);
             }
         }
 
-        //public static void TestTrans(int terminal = 1, int pump = 1,//int.Parse(comboBox1.SelectedItem.ToString());
-        //int nozzle = 1, int product = 1, decimal price = 558, int initNum = 0)
-        //{
-        //    var discount = 0;//100;//(Order.BasePrice - Order.Price)*Order.Quantity;
-        //    var fuel = Driver.Fuels.First(t => t.Value.ID == product);
-        //    int allowed = 0;
-        //    foreach (var pumpFuel in Driver.Pumps[pump].Fuels)
-        //    {
-        //        allowed += 1 << (pumpFuel.Value.ID - 1);
-        //    }
-        //    ASUDriver.XmlPumpClient.Init(terminal, pump, pump, XmlPumpClient.WaitAnswerTimeout, 1);
-        //    Driver.log.Write("занять колонку\r\n", 0, true);
-        //    if (!XmlPumpClient.Presale(terminal, pump, allowed, price, 0, price / fuel.Value.Price, PAYMENT_TYPE.Cash, "qwertyuiop" + initNum, product, "АИ-92", (int)(fuel.Value.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
-        //        return;
-        //    Driver.log.Write("предоплата\r\n", 0, true);
-
-        //    string errMsg = "";
-        //    if (!XmlPumpClient.Authorize(terminal, pump, 10, allowed, nozzle, "qwertyuiop" + initNum, (int)(price * 100), DELIVERY_UNIT.Money, XmlPumpClient.WaitAnswerTimeout, out errMsg))
-        //        return;
-        //    Driver.log.Write("разрешить налив\r\n", 0, true);
-            
-        //    var endMessage = XmlPumpClient.EndFillingEventWait(pump, "qwertyuiop" + initNum);
-            
-        //    if (!XmlPumpClient.Collect(terminal, pump, 10, "qwertyuiop" + initNum, XmlPumpClient.WaitAnswerTimeout))
-        //        return;
-        //    Driver.log.Write("освобождение колонки\r\n", 0, true);
-        //    XmlPumpClient.SaleDataSale(terminal, pump, allowed, price, (endMessage == null ? 0 : (decimal)endMessage.Money) / 100, 0, price / fuel.Value.Price, (endMessage == null ? 0 : (decimal)endMessage.Liters) / 100, PAYMENT_TYPE.Cash, "qwertyuiop" + initNum, product, "АИ-92", (int)(fuel.Value.Price * 100), "", 1);
-        //    Thread.Sleep(3000);
-        //    Driver.log.Write("фактические данные заправки\r\n", 0, true);
-        //    XmlPumpClient.FiscalEventReceipt(Driver.terminal, pump,
-        //    1350 + initNum, 65 + initNum, 6,//GetShiftDocNum(), GetDocNum(), GetShiftNum(),
-        //    price, 0, PAYMENT_TYPE.Cash, "qwertyuiop" + initNum, 1);
-        //    Driver.log.Write($"чек:\r\n" +
-        //    $"GetShiftDocNum: {1350 + initNum}\r\n" +
-        //    $"GetDocNum: {65 + initNum}\r\n" +
-        //    $"GetShiftNum: {6}\r\n" +
-        //    $"OverAmount: {price}\r\n", 0, true);
-        //    XmlPumpClient.Init(terminal, pump, -pump, XmlPumpClient.WaitAnswerTimeout, 1);
-        //    Driver.log.Write("изм. статуса\r\n", 0, true);
-            
-        //    var res2 = XmlPumpClient.Statuses;
-        //    var res3 = XmlPumpClient.Fillings;
-            
-        //    XmlPumpClient.ClearAllTransactionAnswers(pump, "qwertyuiop" + initNum);
-        //    Driver.log.Write("\r\n", 0, true);
-        //}
-
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
         static void Main()
         {
-            //Application.EnableVisualStyles();
-            //Application.SetCompatibleTextRenderingDefault(false);
-            //Application.Run(new Form1());
             Console.WriteLine("Opening...");
+            //start ASU - xml client
             Driver.InitXmlClient();
-            OpenDriver();
+            //start Terminal client
+            //OpenDriver();
+            //start Benzuber client
             Driver.StartBenzuber();
-            //Console.WriteLine("Press [ENTER] to exit");
+            //for background child process
+            Console.WriteLine("Press [ENTER] to exit");
             Console.ReadLine();
-            //while (true)
-            //{
-            //}
-            //TestTrans(1, 2, 1, 1, 542, 3);
         }
     }
 }

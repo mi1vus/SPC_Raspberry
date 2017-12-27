@@ -252,16 +252,9 @@ namespace ASUDriver
                 Client.Connect(bHostB2, iPort); //подключение клиента
                 Stream = Client.GetStream(); // получаем поток
 
-                //string message = "-------";
-                //SendMessage(message);
-                //byte[] data = Encoding.Unicode.GetBytes(message);
-                //stream.Write(data, 0, data.Length);
-
-                //запускаем новый поток для получения данных
+                //запускаем новый поток для получения данных от АСУ заправщик
                 Thread receiveThread = new Thread(ReceiveMessageClient) { IsBackground = true };
-                receiveThread.Start(); //старт потока
-                //Console.WriteLine("Добро пожаловать, {0}", userName);
-
+                receiveThread.Start();
             }
             catch (Exception ex)
             {
@@ -293,6 +286,7 @@ namespace ASUDriver
                 //answers = new List<object>();
                 Statuses = new Dictionary<Tuple<int, MESSAGE_TYPES>, object>();
                 Fillings = new Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>>();
+                // Поток ловящий ответы от сервера АСУ заправщик
                 Thread receiveThread = new Thread(ReceiveMessageSocket){ IsBackground = true };
                 _sockHost = bHostB2;
                 _sockPort = iPort;

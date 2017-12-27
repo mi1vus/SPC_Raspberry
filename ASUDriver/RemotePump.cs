@@ -70,9 +70,8 @@ namespace RemotePump_Driver
  
         private static object fillingOversLocker = new object();
         private static Dictionary<string,List<OrderInfo>> fillingOvers = new Dictionary<string, List<OrderInfo>>();
-        public static void AddFillingOver(OrderInfo Order)
+        public static void AddFillingOver(long TransNum, OrderInfo Order)
         {
-
             log.Write("AddFillingOver: " + Order.OrderRRN.ToString()+", TID: "+Order.TID);
             lock (fillingOversLocker)
             {
@@ -92,23 +91,38 @@ namespace RemotePump_Driver
                             Driver.InsertCardInfo(DateTime.Now, Order.DiscontCardNO, card_t, tid);
                     }
                     catch { }
+
+                    lock (Driver.TransMemoryLocker)
+                        Driver.TransMemory.Remove(TransNum);
+                    Driver.log.Write(
+                        $"\t\tFillingOver:\r\n\t\tудаление заказа №{TransNum}\r\n", 2, true);
+
                 }
                 catch { }
             }
             try
             {
                 log.Write($"Подтверждения налива: {Order.OrderRRN}, сумма: {Order.OverAmount:0.00}р");
+                Driver.log.Write($"Подтверждения налива: {Order.OrderRRN}, сумма: {Order.OverAmount:0.00}р", 2, true);
                 if (clients.ContainsKey(Order.TID))
                     clients[Order.TID].RaiseFillingOverEvent(Order.OrderRRN, Order.OverAmount);
                 else
+                {
                     log.Write($"Терминал \"{Order.TID}\" не найден.");
+                    Driver.log.Write($"Терминал \"{Order.TID}\" не найден.", 2, true);
+                }
             }
             catch (Exception ex)
             {
                 log.Write("Ошибка при выплнении подтверждения налива" + ex.ToString());
             }
         }
-        public void RaiseFillingOverEvent(string TransactionID, decimal Amount) => FillingOverEvent?.Invoke(this, new FillingOverEventArgs() { TransactionID = TransactionID, Amount = Amount });
+        public void RaiseFillingOverEvent(string TransactionID, decimal Amount)
+        {
+            Driver.log.Write($@"RaiseFillingOverEvent: FillingOverEvent = {FillingOverEvent?.ToString() ?? "null"}", 2, true);
+            FillingOverEvent?.Invoke(this, new FillingOverEventArgs() {TransactionID = TransactionID, Amount = Amount});
+        }
+
         public class FillingOverEventArgs : EventArgs { public string TransactionID { get; set; } public decimal Amount { get; set; } }
         public event EventHandler<FillingOverEventArgs> FillingOverEvent;
 
@@ -152,21 +166,42 @@ namespace RemotePump_Driver
         private string TID;
         public OrderInfo[] GetFillingOvers()
         {
+            //Driver.log.Write($@"GetFillingOvers: start[{fillingOvers.Count}]", 2, true);
             var ret = new OrderInfo[0];
             lock (fillingOversLocker)
             {
-                if (fillingOvers.Count > 0)
+                //if (fillingOvers.Count > 0)
+                //{
+                //foreach (var over in fillingOvers)
+                //{
+                //    Driver.log.Write($@"GetFillingOvers: if[{over.Key}]", 2, true);
+                //    foreach (var ord in over.Value)
+                //        Driver.log.Write($@"      GetFillingOvers: if[{ord}]", 2, true);
+                //}
+                try
                 {
-                    if (fillingOvers.ContainsKey(TID))
+                    if (fillingOvers[TID]?.Any() ?? false)
                     {
                         // main.log.Write(TID+" fillingOvers.Count=" + fillingOvers[TID].Count);
+                        Driver.log.Write(
+                            $@"GetFillingOvers: {TID} ret[{fillingOvers[TID].Count}]", 2,
+                            true);
+                        foreach (var over in fillingOvers[TID])
+                        {
+                            Driver.log.Write($@"      GetFillingOvers: {TID} ret[{over}]", 2, true);
+                        }
                         ret = fillingOvers[TID].ToArray();
 
                         fillingOvers[TID].Clear();
+
                     }
                 }
+                catch 
+                {
+                }
+                //}
             }
-            return ret.ToArray();
+            return ret;
         }
 
         private static Dictionary<int, string> pumpLocked_global = new Dictionary<int, string>();
@@ -527,7 +562,11 @@ namespace RemotePump_Driver
             }
             lock (fillingOversLocker)
             {
-                return (from t in fillingOvers[TID] where t.OrderRRN == OrderRRN select t).SingleOrDefault();
+                var tmp = (from t in fillingOvers[TID] where t.OrderRRN == OrderRRN select t).SingleOrDefault();
+                Driver.log.Write(
+$"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n", 2, true);
+
+                return tmp;
             }
         }
         public bool SetDose(OrderInfo Order)
@@ -573,7 +612,7 @@ namespace RemotePump_Driver
             //#warning Дописать обработку получения активного топлива
             lock (Driver.PumpsLocker)
                 if (!Driver.Pumps.ContainsKey(No))
-                return new PumpInformation();
+                    return new PumpInformation();
           //  log.Write("GetPumpInformation" + No.ToString());
 
             Dictionary<string, Driver.FuelInfo> fuels;
