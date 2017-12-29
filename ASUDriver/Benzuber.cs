@@ -21,7 +21,7 @@ namespace ASUDriver
         public class ExcangeServer
         {
             public static bool enable = false;
-            public static ConfigMemory config = ConfigMemory.GetConfigMemory("Benzuber");
+            public static ConfigMemory config = ConfigMemory.GetConfigMemory("ASUClient");
 
             //public static Logger logBenzuber = new Logger("Benzuber");
 
@@ -170,27 +170,27 @@ namespace ASUDriver
                     Driver.log.Write($"Вычисляем HW ID: {hw_id} для: {hw[0].Name}:{hw[0].Serial}", 1, true);
                 }
                 //                var str = string.Format("net.tcp://" + config["server"] + ":" + config["exchangeport"]);
-                var str = string.Format("serv: " + config["server"] + "; port: " + config["exchangeport"] + "; client: " + config["station_id"]);
+                var str = string.Format("serv: " + config["benzuber_server"] + "; port: " + config["benzuber_exchangeport"] + "; client: " + config["benzuber_station_id"]);
                 Driver.log.Write(str, 0, true);
                 var location = Assembly.GetExecutingAssembly().Location;
 
                 //ClientID должен задаваться в настройках
                 //HW_ID должен генерироваться библиотекой на основании серийных номеров оборудования  
-                client = new TcpExcangeClient(config["station_id"]/*"41065"*/, hw_id);
+                client = new TcpExcangeClient(config["benzuber_station_id"]/*"41065"*/, hw_id);
 
                 //Указываем обработчик для запросов от сервера  
                 client.HandleRequest = new TcpExcangeClient.HandleRequestDelegate(handler);
 
                 int port;
-                if (int.TryParse(config["exchangeport"], out port))
+                if (int.TryParse(config["benzuber_exchangeport"], out port))
                 {
                     //Запускаем клиента
-                    client.Start(config["server"]/*"212.49.100.116 или testazsapi.benzuber.ru"*/, port/*5051 или 1102*/ );
+                    client.Start(config["benzuber_server"]/*"212.49.100.116 или testazsapi.benzuber.ru"*/, port/*5051 или 1102*/ );
                 }
                 else
                 {
                     //Запускаем клиента
-                    client.Start(config["server"]);
+                    client.Start(config["benzuber_server"]);
                 }
             }
             public static string ComputeMD5Checksum(string Data)

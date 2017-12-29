@@ -14,12 +14,12 @@ namespace SPC_Raspberry
         {
             try
             {
-                var enable = ConfigMemory.GetConfigMemory("Client");
+                var enable = ConfigMemory.GetConfigMemory("ASUClient");
                 foreach (var r in enable.GetValueNames())
                 {
                     Driver.log.Write($@"[{r}]:{enable[r]}", 3, true);
                 }
-                if (string.Compare(enable["enable"], "1", StringComparison.InvariantCultureIgnoreCase) != 0)
+                if (string.Compare(enable["terminal_enable"], "1", StringComparison.InvariantCultureIgnoreCase) != 0)
                 {
                     Driver.log.Write("Client ТРК отключен", 0, true);
                     return;
@@ -673,7 +673,7 @@ OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", 2, true);
             //start ASU - xml client
             Driver.InitXmlClient();
             //start Terminal client
-            //OpenDriver();
+            OpenDriver();
             //start Benzuber client
             Driver.StartBenzuber();
             //for background child process

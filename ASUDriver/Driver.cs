@@ -704,8 +704,28 @@ namespace ASUDriver
                     {
                         try
                         {
-                            isInit = true;
+                            string ip = string.Empty;
                             int pt;
+                            if (Params.ContainsKey("ASUIp"))
+                                ip = Params["ASUIp"];
+                            var digits = ip.Split(new[] {'.'}, StringSplitOptions.RemoveEmptyEntries);
+                            byte[] host;
+
+                            try
+                            {
+                                host = digits.Select(d => Convert.ToByte(int.Parse(d))).ToArray();
+                                if (host.Length != 4)
+                                    throw new Exception("Неверный формат ip в файле конфигурации");
+                            }
+                            catch
+                            {
+                                log.Write("Неверный формат ip в файле конфигурации", 0, true);
+                                return;
+                            }
+
+
+                            isInit = true;
+
                             if (!Params.ContainsKey("port") || !int.TryParse(Params["port"], out pt))
                                 pt = port;
                             int t;
@@ -732,10 +752,13 @@ namespace ASUDriver
                                 //Benzuber.ExcangeServer.logBenzuber.LogLevel = t;
                             }
 
-                            XmlPumpClient.StartSocket(hostB2, pt, terminal);
+
+
+                            XmlPumpClient.StartSocket(host, pt, terminal);
                             XmlPumpClient.InitData(terminal);
                             log.Write(
-    $@"XmlPumpClient Open port: {pt}{Environment.NewLine}
+    $@"XmlPumpClient Open ip: {host[0]}.{host[1]}.{host[2]}.{host[3]}
+    port: {pt}{Environment.NewLine}
     SendTimeout: {XmlPumpClient.SendTimeout} {Environment.NewLine}
     WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}{Environment.NewLine}
     LogLevel: {log.LogLevel}{Environment.NewLine}
@@ -777,12 +800,12 @@ namespace ASUDriver
 
                 public static void StartBenzuber()
                 {
-                    var enable = ConfigMemory.GetConfigMemory("Benzuber");
+                    var enable = ConfigMemory.GetConfigMemory("ASUClient");
                     foreach (var r in enable.GetValueNames())
                     {
                         Driver.log.Write($@"[{r}]:{enable[r]}", 3, true);
                     }
-                    if (string.Compare(enable["enable"], "1", StringComparison.InvariantCultureIgnoreCase) != 0)
+                    if (string.Compare(enable["benzuber_enable"], "1", StringComparison.InvariantCultureIgnoreCase) != 0)
                     {
                         log.Write("BenzuberServer отключен", 0, true);
                         return;

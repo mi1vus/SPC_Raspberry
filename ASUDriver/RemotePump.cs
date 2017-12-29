@@ -53,8 +53,8 @@ namespace RemotePump_Driver
                 MessageProperties prop = context.IncomingMessageProperties;
                 RemoteEndpointMessageProperty endpoint = prop[RemoteEndpointMessageProperty.Name] as RemoteEndpointMessageProperty;
                 //получаем IP клиента.
-                var config = ConfigMemory.GetConfigMemory("Client");
-                string ipAddr = config["ip"];//endpoint.Address;
+                var config = ConfigMemory.GetConfigMemory("ASUClient");
+                string ipAddr = config["terminal_ip"];//endpoint.Address;
                 TID = !string.IsNullOrWhiteSpace(_TID)?_TID:ipAddr;
                 SmartPumpControlRemote.Shell.AddTerminal(TID, ipAddr);
                 log.WriteFormated("Connected: {0}, from: {1}", TID, ipAddr);

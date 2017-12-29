@@ -143,7 +143,7 @@ namespace ASUDriver
             PumpOverdose = 205
         }
 
-        public static ConfigMemory config = ConfigMemory.GetConfigMemory("Benzuber");
+        public static ConfigMemory config = ConfigMemory.GetConfigMemory("ASUClient");
 
         public static Logger log = new Logger("Benzuber");
         static object pumpLocker = new object();
