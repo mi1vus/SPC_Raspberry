@@ -673,7 +673,7 @@ OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", 2, true);
             //start ASU - xml client
             Driver.InitXmlClient();
             //start Terminal client
-            OpenDriver();
+            //OpenDriver();
             //start Benzuber client
             Driver.StartBenzuber();
             //for background child process
