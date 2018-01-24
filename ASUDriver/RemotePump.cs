@@ -304,7 +304,7 @@ namespace RemotePump_Driver
                              *var ret = CoreRef.Pump_Driver.SendCmd("save_fiscal_check",
                                   reciept.CashRegisterSerial + "\n"
                                   + reciept.DateTime.ToString() + "\n"
-                                  + reciept.ID + "\n"
+                                  + reciept.Id + "\n"
                                   + ((reciept.DocType == DocType.Sale) ? 6 : 4).ToString() + "\n"
                                   + ((int)pay_type) + "\n1\n"
                                   + Order.ProductCode + "\n"
@@ -319,7 +319,7 @@ namespace RemotePump_Driver
                             string BP_SerialNum = data_array[0];
                             //reciept.DateTime.ToString() 
                             DateTime BP_DateTime = DateTime.Parse(data_array[1]);
-                            //reciept.ID 
+                            //reciept.Id 
                             int BP_BillNumber = int.Parse(data_array[2]);
                             //((reciept.DocType == DocType.Sale) ? 6 : 4).ToString() + "\n"
                             short BP_BillType = short.Parse(data_array[3]);
@@ -589,7 +589,7 @@ $"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n"
             var prods = Driver.Fuels;
             foreach (var prod in prods)
             {
-                ret.Add(new ProductInformation() { Name = prod.Value.Name, BasePrice = prod.Value.Price, Code = prod.Value.ID});
+                ret.Add(new ProductInformation() { Name = prod.Value.Name, BasePrice = prod.Value.Price, Code = prod.Value.Id});
             }
             return ret.ToArray();
         }
@@ -631,9 +631,9 @@ $"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n"
             //log.WriteFormated("fuels.Length: {0}", fuels.Count);
           //  var products = GetProducts();
           //  log.WriteFormated("GetProducts.Length: {0}", products.Length);
-            foreach (var fuel in fuels)
+            foreach (var fuel in fuels.Where(fa => fa.Value.Active))
             {
-                prodInfo.Add(new ProductInformation() { Name = fuel.Value.Name, BasePrice = fuel.Value.Price, Code = fuel.Value.ID });
+                prodInfo.Add(new ProductInformation() { Name = fuel.Value.Name, BasePrice = fuel.Value.Price, Code = fuel.Value.Id });
                 log.Write("Products:"+ fuel.Value.ToString());
             }
             log.Write($"pump_status.DispStatus: {pump_status.DispStatus}");

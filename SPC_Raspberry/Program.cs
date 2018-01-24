@@ -43,7 +43,7 @@ namespace SPC_Raspberry
 
                         //var prePaid = Order.Price*Order.Quantity;
                         var discount = 0; //100;//(Order.BasePrice - Order.Price)*Order.Quantity;
-                        var fuel = Driver.Fuels.First(t => t.Value.ID == Order.ProductCode);
+                        var fuel = Driver.Fuels.First(t => t.Value.Id == Order.ProductCode);
                         int allowed = 0;
 
                         Dictionary<string, Driver.FuelInfo> fuels;
@@ -53,9 +53,9 @@ namespace SPC_Raspberry
                             fuels = Driver.Pumps[Order.PumpNo].Fuels;
                             //Driver.log.Write("", 0, true);
                         }
-                        foreach (var pumpFuel in fuels)
+                        foreach (var pumpFuel in fuels.Where(fa => fa.Value.Active))
                             {
-                                allowed += 1 << (pumpFuel.Value.ID - 1);
+                                allowed += 1 << (pumpFuel.Value.Id - 1);
                             }
                         //decimal price = 156;
                         //decimal vol = 100;
@@ -312,11 +312,11 @@ $@"Presale:\r\n
                         }
 
                         //var discount = (order.BasePrice - order.Price) * order.Quantity;
-                        //var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
+                        //var fuel = Driver.Fuels.First(t => t.Value.Id == order.ProductCode);
                         //int allowed = 0;
                         //foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
                         //{
-                        //    allowed += 1 << (pumpFuel.Value.ID - 1);
+                        //    allowed += 1 << (pumpFuel.Value.Id - 1);
                         //}
                         //TODO Не работает!
                         if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_AUTHORIZED)
@@ -438,7 +438,7 @@ $@"Presale:\r\n
                                 Driver.Pumps[PumpId] = pump;
                                 //Driver.log.Write("", 0, true);
                             }
-                            XmlPumpClient.Init(Driver.terminal, PumpId, -PumpId, XmlPumpClient.WaitAnswerTimeout, 1);
+                            XmlPumpClient.Init(Driver.terminal, PumpId, -1, XmlPumpClient.WaitAnswerTimeout, 1);
                                 //Driver.Pumps[Pump] = pump;
 
                                 //label1.Text += "Освобождение ТРК: " + Pump + "\r\n";
@@ -471,11 +471,11 @@ $@"Пересчет заказа, TransID: {Trans_ID}\r\n
 
                             //var order = Driver.TransMemory[Trans_ID];
                             //var discount = (order.BasePrice - order.Price) * order.Quantity;
-                            //var fuel = Driver.Fuels.First(t => t.Value.ID == order.ProductCode);
+                            //var fuel = Driver.Fuels.First(t => t.Value.Id == order.ProductCode);
                             //int allowed = 0;
                             //foreach (var pumpFuel in Driver.Pumps[order.PumpNo].Fuels)
                             //{
-                            //    allowed += 1 << (pumpFuel.Value.ID - 1);
+                            //    allowed += 1 << (pumpFuel.Value.Id - 1);
                             //}
 
                             //if (!XmlPumpClient.Collect(Driver.terminal, order.PumpNo, allowed, order.OrderRRN, 3000))
@@ -579,14 +579,14 @@ $@"Сохранение документа, TransID: {Trans_ID}
                         }
 
                         var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
-                        var fuel = Driver.Fuels.First(t => t.Value.ID == BP_Product);
+                        var fuel = Driver.Fuels.First(t => t.Value.Id == BP_Product);
                         int allowed = 0;
                         Dictionary<string, Driver.FuelInfo> fuels;
                         lock (Driver.PumpsLocker)
-                        fuels = Driver.Pumps[PumpNo].Fuels;
-                        foreach (var pumpFuel in fuels)
+                            fuels = Driver.Pumps[PumpNo].Fuels;
+                        foreach (var pumpFuel in fuels.Where(fa => fa.Value.Active))
                         {
-                            allowed += 1 << (pumpFuel.Value.ID - 1);
+                            allowed += 1 << (pumpFuel.Value.Id - 1);
                         }
 
                         //TODO Проба со скидками!!!!
@@ -625,7 +625,7 @@ fuelPrice: {(int)(Price/*fuel.Value.Price*/ * 100)}\r\n", 2, true
                         //    $"OverAmount: {(endMessage?.Money ?? 0)/100.0}\r\n" +
                         //    $"OrderRRN: {order.OrderRRN}\r\n");
 
-                        XmlPumpClient.Init(Driver.terminal, PumpNo, -PumpNo, XmlPumpClient.WaitAnswerTimeout, 1);
+                        XmlPumpClient.Init(Driver.terminal, PumpNo, -1, XmlPumpClient.WaitAnswerTimeout, 1);
                         Driver.log.Write("Освобождение колонки\r\n", 0, true);
 
                         //var res = XmlPumpClient.answers;
@@ -673,7 +673,7 @@ OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", 2, true);
             //start ASU - xml client
             Driver.InitXmlClient();
             //start Terminal client
-            //OpenDriver();
+            OpenDriver();
             //start Benzuber client
             Driver.StartBenzuber();
             //for background child process

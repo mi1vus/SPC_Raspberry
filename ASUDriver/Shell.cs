@@ -45,11 +45,11 @@ namespace SmartPumpControlRemote
 
 
 
-//            Console.WriteLine($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState ? "Online" : "Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}");
+//            Console.WriteLine($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState ? "Online" : "Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.Id}");
             
             
             
-            //System.Windows.Forms.ToString()Box.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.ID}", "Обслуживание", System.Windows.Forms.ToString()BoxButtons.OK, System.Windows.Forms.ToString()BoxIcon.Information);
+            //System.Windows.Forms.ToString()Box.Show($"Нет доступных терминалов для обслуживания\r\nСостояние Benzuber.ru: {(BenzuberServer.Excange.ConnectionState?"Online":"Offline")}\r\nКод АЗС Benzuber.ru: {BenzuberServer.Excange.Id}", "Обслуживание", System.Windows.Forms.ToString()BoxButtons.OK, System.Windows.Forms.ToString()BoxIcon.Information);
             return "";
         }
         public static void ShowAllToRun(string TID)

@@ -221,7 +221,7 @@ namespace ASUDriver
                         PumpNum, Fuel, TransID, Amount));
 
                     var product = (from fuel in Driver.Fuels
-                                   where fuel.Value.ID == get_int_code(Fuel)
+                                   where fuel.Value.Id == get_int_code(Fuel)
                                    select fuel.Value).SingleOrDefault();
                     if (product.Name == null)
                     {
@@ -244,7 +244,7 @@ namespace ASUDriver
 
                             Price = product.Price,
                             BasePrice = product.Price,
-                            ProductCode = product.ID,
+                            ProductCode = product.Id,
 
                             CardNO = TransID.PadLeft(20, '0'),
                             DiscontCardNO = "",
@@ -314,13 +314,13 @@ namespace ASUDriver
                 var hw = ActivationClass.GetDiskDriveSerialNumbers();
                 if (hw.Length <= 0)
                 {
-                    log.Write("Не удалось получить HW ID");
+                    log.Write("Не удалось получить HW Id");
                     return;
                 }
                 else
                 {
                     hw_id = ComputeMD5Checksum(hw[0].Name + hw[0].Serial);
-                    log.Write($"Вычисляем HW ID: {hw_id} для: {hw[0].Name}:{hw[0].Serial}");
+                    log.Write($"Вычисляем HW Id: {hw_id} для: {hw[0].Name}:{hw[0].Serial}");
                 }
                 var str = string.Format("net.tcp://" + config["server"] + ":" + config["exchangeport"]);
                 log.Write(str);
@@ -474,7 +474,7 @@ namespace ASUDriver
                     log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{cnt}", 0, true);
                     var info = new StationGate.StationInformaton()
                     {
-                        Fuels = new List<StationGate.StationInformaton.FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new StationGate.StationInformaton.FuelInfo { Code = get_ex_code(fuel.Value.ID), Name = fuel.Value.Name, Price = fuel.Value.Price })
+                        Fuels = new List<StationGate.StationInformaton.FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new StationGate.StationInformaton.FuelInfo { Code = get_ex_code(fuel.Value.Id), Name = fuel.Value.Name, Price = fuel.Value.Price })
                     };
 
                     foreach (var fuel in info.Fuels) log.Write($"{fuel.Code}. {fuel.Name} = {fuel.Price:0.00}р");

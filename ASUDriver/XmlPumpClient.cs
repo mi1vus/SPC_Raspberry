@@ -369,7 +369,7 @@ namespace ASUDriver
             lock (Socket)
                 Socket.Send(bytesToSent, bytesToSent.Length, 0);
 
-            WriteToExchangeLog($"\r\n********send*********\r\n{message}");
+            WriteToExchangeLog($"\r\n********send*********\r\n{message.Replace("\n", "\r\n")}");
             Thread.Sleep(timeout);
         }
 
@@ -447,7 +447,7 @@ namespace ASUDriver
                     if (builder.Length != 0)
                     {
                         var tmp = builder.ToString();
-                        WriteToExchangeLog($"\r\n********recv*********\r\n{tmp}");
+                        WriteToExchangeLog($"\r\n********recv*********\r\n{tmp.Replace("\n", "\r\n")}");
                         string[] ansverStrings = builder.ToString()
                             .Split(new[] {"<?xml version=\"1.0\"?>"}, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var xml in ansverStrings)
@@ -455,7 +455,7 @@ namespace ASUDriver
                             if (isValidXml(xml))
                             {
                                 builder.Remove(0, xml.Length + 21);
-                                WriteToExchangeLog("\r\n*****************\r\n<? xml version =\"1.0\"?>" + xml);
+                                WriteToExchangeLog("\r\n*****************\r\n<? xml version =\"1.0\"?>\r\n" + xml.Replace("\n", "\r\n"));
                             }
                             else
                             {
@@ -589,9 +589,27 @@ namespace ASUDriver
                     List<int> inds;
                     lock (Driver.PumpsLocker)
                         inds = Driver.Pumps.Keys.ToList();
+
+                    InitData(Driver.terminal);
+
+                    object item;
+                    ////lock (PumpsLocker)
+                    ////    Pumps.Clear();
+                    //if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
+                    //    MESSAGE_TYPES.OnDataInit), out item) || item == null)
+                    //{
+                    //    InitData(Driver.terminal);
+                    //}
+                    OnDataInit onDataInit = default(OnDataInit);
+                    if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit),
+                            out item) && item != null)
+                    {
+                        onDataInit = (OnDataInit) item;
+                    }
+
                     foreach (var pmpInd in inds)
                     {
-                        Driver.log.Write("Обновление состояния ТРК: " + pmpInd + "\r\n", 3, true);
+                        //Driver.log.Write("Обновление состояния ТРК: " + pmpInd + "\r\n", 3, true);
 
                         //DispStatus:
                         //	0 - ТРК онлайн(при этом TransID должен = -1, иначе данный статус воспринимается как 3)
@@ -610,7 +628,27 @@ namespace ASUDriver
                                 Driver.Pumps[pmpInd] = pmp;
                             }
                         }
-                }
+                        var pump = onDataInit.Pumps.First(t=>t.PumpId == pmpInd);
+                        foreach (var nozzle in pump.Nozzles)
+                        {
+                            OnPumpStatusChange оnPumpStatusChanged = null;
+                            Statuses.TryGetValue(
+                                new Tuple<int, MESSAGE_TYPES>(pump.PumpId, MESSAGE_TYPES.OnPumpStatusChange),
+                                    out item);
+
+                            if (оnPumpStatusChanged == null)
+                                // || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))
+                                continue;
+
+                            var fuel = Driver.Fuels.First(t => t.Value.Id == nozzle.GradeId);
+                            var fuel_val = fuel.Value;
+                            fuel_val.Active = !оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId)
+                                .Approval.Contains("Forbidden");
+                            //Driver.log.Write($"\tПродукт: {fuel.Key}\r\n", 0, true);
+                            lock (Driver.PumpsLocker)
+                                Driver.Pumps[pump.PumpId].Fuels[fuel.Key] = fuel_val;
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1196,6 +1234,8 @@ $@"
         {
             if (ExchangeLogLevel >= 3)
             {
+                if ((ExchangeLogLevel < 100) && (msg.Contains("OnPumpStatusChange") || msg.Contains("PumpGetStatus"))    )
+                    return;
                 try
                 {
                     if (!File.Exists(ExchangeLogDir))

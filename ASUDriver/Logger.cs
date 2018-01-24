@@ -184,11 +184,11 @@ namespace ProjectSummer.Repository
         public bool Write(string Message, int MessageLevel = 0, bool SendToConsole = false, bool ForceSave = true)
         {
             var line = string.Format("{0:dd/MM/yy HH:mm:ss.fff}>[{1:000}]>{2}", DateTime.Now, MessageLevel, Message.Replace("\r", "\\r").Replace("\n", "\\n"));
-
+            var line_cons = string.Format("{0:HH:mm:ss.fff}>[{1}]>{2}", DateTime.Now, MessageLevel, Message.Replace("\r", "\\r").Replace("\n", "\\n"));
             if ((MessageLevel <= LogLevel) && (LogEnable))
             {
                 if (SendToConsole)
-                    Console.WriteLine(LoggerName + ">>" + line);
+                    Console.WriteLine(line_cons);
                 lock (logMemory)
                     logMemory.Add(line);
                 if (ForceSave)
