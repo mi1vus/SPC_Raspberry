@@ -635,6 +635,7 @@ namespace ASUDriver
                             Statuses.TryGetValue(
                                 new Tuple<int, MESSAGE_TYPES>(pump.PumpId, MESSAGE_TYPES.OnPumpStatusChange),
                                     out item);
+                            оnPumpStatusChanged = item as OnPumpStatusChange;
 
                             if (оnPumpStatusChanged == null)
                                 // || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))

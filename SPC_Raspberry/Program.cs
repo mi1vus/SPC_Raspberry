@@ -32,127 +32,18 @@ namespace SPC_Raspberry
                         long transCounter;
                         lock (Driver.TransCounterLocker)
                         {
-                            //Driver.log.Write("", 0, true);
                             transCounter = Driver.TransCounter;
                             ++Driver.TransCounter;
-                            //Driver.log.Write("", 0, true);
                         }
                         Driver.log.Write("Установка дозы на ТРК: " + Order.PumpNo + " , сгенерирован TransID: " +
                                          transCounter + "\r\n", 0, true);
                         Order.PumpRRN = transCounter.ToString();
-
-                        //var prePaid = Order.Price*Order.Quantity;
-                        var discount = 0; //100;//(Order.BasePrice - Order.Price)*Order.Quantity;
-                        var fuel = Driver.Fuels.First(t => t.Value.Id == Order.ProductCode);
-                        int allowed = 0;
-
-                        Dictionary<string, Driver.FuelInfo> fuels;
-                        lock (Driver.PumpsLocker)
-                        {
-                            //Driver.log.Write("", 0, true);
-                            fuels = Driver.Pumps[Order.PumpNo].Fuels;
-                            //Driver.log.Write("", 0, true);
-                        }
-                        foreach (var pumpFuel in fuels.Where(fa => fa.Value.Active))
-                            {
-                                allowed += 1 << (pumpFuel.Value.Id - 1);
-                            }
-                        //decimal price = 156;
-                        //decimal vol = 100;
-                        //if (!XmlPumpClient.Presale(
-                        //    Driver.terminal, Order.PumpNo, allowed, Order.Amount + discount,
-                        //    discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode), 
-                        //    Order.OrderRRN, 1, "АИ-92", 2000, "1234567890123456", 1, 3000))
-                        //    return -1;
-                        //Driver.log.Write("предоплата\r\n");
-
-                        //if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, 10, allowed, Order.PumpNo, Order.OrderRRN, (int)(price * 100), DELIVERY_UNIT.Money, 3000))
-                        //    return -1;
-                        //Driver.log.Write("разрешить налив\r\n");
-
                         ++transCounter;
-
-                        Driver.log.Write(
-$@"Authorize:\r\n
-терминал: {Driver.terminal}\r\n
-колонка: {Order.PumpNo}\r\n
-TransCounter: {transCounter}\r\n
-дост. пистолеты: {allowed}\r\n
-Nazzle: {Order.ProductCode}\r\n
-RNN: {Order.OrderRRN.PadLeft(20, '0')}\r\n
-Limit: {(int)(Order.Quantity * 100)}\r\n
-Unit: {DELIVERY_UNIT.Volume.ToString()}\r\n"
-, 2, true);
-
-                        //TODO Проба со скидками!!!!
-                        string errMsg = "";
-                        if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, transCounter,
-                            allowed, Order.ProductCode, Order.OrderRRN.PadLeft(20, '0'), (int)(Order.Quantity * 100), DELIVERY_UNIT.Volume,/*(int) (Order.Amount*100), DELIVERY_UNIT.Money,*/
-                            XmlPumpClient.WaitAnswerTimeout, out errMsg))
-                        //if (!XmlPumpClient.Authorize(Driver.terminal, Order.PumpNo, transCounter,
-                        //    allowed, Order.ProductCode, Order.OrderRRN, (int) (Order.Amount*100), DELIVERY_UNIT.Money,
-                        //    XmlPumpClient.WaitAnswerTimeout))
-                        {
-                            Driver.log.Write($"SetDoseCallback:Authorize: {errMsg}\r\n", 1, true);
-                            return -1;
-                        }
-
-                            Driver.log.Write(
-$@"Presale:\r\n
-терминал: {Driver.terminal}\r\n
-колонка: {Order.PumpNo}\r\n
-дост. пистолеты: {allowed}\r\n
-сумма руб: {Order.Amount}\r\n
-скидка: {discount}\r\n
-кол-во литры: {Order.Quantity}\r\n
-тип оплаты: {XmlPumpClient.PaymentCodeToType(Order.PaymentCode)}\r\n
-рнн: {Order.OrderRRN}\r\n
-продукт код: {Order.ProductCode}\r\n
-продукт: {fuel.Key}\r\n
-продукт цена коп: {(int)(Order.Price/*fuel.Value.Price*/ * 100)}\r\n"
-, 2, true);
-
-                        //TODO Проба со скидками!!!!
-                        if (!XmlPumpClient.Presale(Driver.terminal, Order.PumpNo, allowed, Order.Amount,
-                            discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode),
-                            Order.OrderRRN, Order.ProductCode, fuel.Key,
-                            (int)(Order.Price/*fuel.Value.Price*/ * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
-                        //if (!XmlPumpClient.Presale(Driver.terminal, Order.PumpNo, allowed, Order.Amount,
-                        //    discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode),
-                        //    Order.OrderRRN, Order.ProductCode, fuel.Key,
-                        //    (int)(fuel.Value.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
-                        {
-                            Driver.log.Write("SetDoseCallback:Presale: нет о твета на Presale\r\n", 0, true);
-                            return -1;
-                        }
-
-
-                        Driver.log.Write("Налив разрешен\r\n", 0, true);
-
-                            //lock (Driver.TransMemoryLocker)
-                            //{
-                            //    Driver.TransMemory[(long) transCounter] = Order;
-                            //}
 
                         Thread myThread2 = new Thread(Driver.WaitCollectProxy) {IsBackground = true};
                         myThread2.Start(transCounter); // запускаем поток
 
-                            //XmlPumpClient.PumpRequestAuthorize(Driver.terminal, Order.PumpNo, transCounter,
-                            //    allowed, 1, Order.OrderRRN, (int)(Order.Amount * 100), DELIVERY_UNIT.Money);
-
-                            //Thread.Sleep(2000);
-
-
-                            //while (XmlPumpClient.answers.Count != 0)
-                            //    XmlPumpClient.PumpRequestCollect(Driver.terminal, Order.PumpNo, transCounter,
-                            //    Order.OrderRRN);
-
-                            //Thread.Sleep(2000);
-
-                            //    Driver.FillingOver(transCounter, (int)(Order.Quantity * 100), (int)(Order.Amount*100));
-
-                            //DebithThread.SetTransID(transCounter);
-                            return transCounter;
+                        return transCounter;
                     },
                     //Запрос состояние ТРК
                     (long Pump, IntPtr ctx) =>

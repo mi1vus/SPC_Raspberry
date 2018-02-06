@@ -22,6 +22,7 @@ namespace ASUDriver
         {
             public static bool enable = false;
             public static ConfigMemory config = ConfigMemory.GetConfigMemory("ASUClient");
+            public static bool UpNozzleAuthorize = false;
 
             //public static Logger logBenzuber = new Logger("Benzuber");
 
@@ -180,12 +181,22 @@ namespace ASUDriver
                 Driver.log.Write(str, 0, true);
                 var location = Assembly.GetExecutingAssembly().Location;
 
+                if (config["up_nozzle_authorize"].CompareTo("true") == 0)
+                {
+                    UpNozzleAuthorize = true;
+                    Driver.log.Write("UpNozzleAuthorize is true", 0, true);
+                }
                 //ClientID должен задаваться в настройках
                 //HW_ID должен генерироваться библиотекой на основании серийных номеров оборудования  
                 client = new TcpExcangeClient(config["benzuber_station_id"]/*"41065"*/, hw_id);
-
+                
                 //Указываем обработчик для запросов от сервера  
                 client.HandleRequest = new TcpExcangeClient.HandleRequestDelegate(handler);
+                int enc;
+                if (int.TryParse(config["benzuber_exchange_encoding"], out enc))
+                {
+                    client.Encoding = Encoding.GetEncoding(enc);
+                }
 
                 int port;
                 if (int.TryParse(config["benzuber_exchangeport"], out port))
@@ -236,7 +247,9 @@ namespace ASUDriver
                 try
                 {
                     //Десериализуем запрос от сервера в объект класса Request   
-                    var op = json_deser<Request>(Str);
+                    Driver.log.Write("Bzer: Запрос src: " + Str + "\r\n", 0, true);
+                    //var op = json_deser<Request>(Str);
+                    Request op = ParseRequest(Str);
                     Driver.log.Write("Bzer: Запрос: " + op?.Operation + "\r\n", 0, true);
 
                     switch (op?.Operation)
@@ -252,13 +265,16 @@ namespace ASUDriver
                                 if (!initialized)
                                 {
                                     initialized = true;
-                                    return json(new { Result = "OK", RunningVersion = "0.1.1 Linux N", LoadedVersion = "0.1.1 Linux N" });
                                 }
                                 //Проверяем есть ли непереданные завершенные транзакции.
                                 //Если нет - возвращаем Result = "OK"
                                 //var fillingOvers = Pump.GetFillingOvers();
                                 if (TransOvers.Count == 0 /*&& fillingOvers.Length == 0*/)
-                                    return json(new { Result = "OK" });
+                                    //return json(new { Result = "OK" });
+                                {
+                                    var postfix = UpNozzleAuthorize ? " N" : " A";
+                                    return json(new { Result = "OK", RunningVersion = "0.1.1 Linux" + postfix, LoadedVersion = "0.1.1 Linux" + postfix });
+                                }
                                 else
                                 {
                                     //Если есть - передаем по одной. Обязательно начиная с последней.
@@ -268,9 +284,17 @@ namespace ASUDriver
                                     lock (TransOversLocker)
                                     {
                                         if (TransOvers.Count == 0)
-                                            return json(new { Result = "OK" });
+                                            return json(new {Result = "OK"});
                                         var last = TransOvers.Last();
-                                        return json(new { Result = "OK", RequestOperation = "FillingOver", Amount = last.Value.Amount, TransactionID = last.Value.TransactionID });
+                                        return
+                                            json(
+                                                new
+                                                {
+                                                    Result = "OK",
+                                                    RequestOperation = "FillingOver",
+                                                    Amount = last.Value.Amount,
+                                                    TransactionID = last.Value.TransactionID
+                                                });
                                     }
                                     //if (fillingOvers.Length == 0)
                                     //    return json(new { Result = "OK" });
@@ -327,7 +351,15 @@ namespace ASUDriver
                                                PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
                                                 ? 3
                                                 : 10;
-                                        pmp.UpNozzle = (byte) ((оnPumpStatusChanged?.Grade ?? -2) + 1);
+                                        if (оnPumpStatusChanged?.Grade != -1)
+                                        {
+                                            pmp.UpNozzle = (byte) ((оnPumpStatusChanged?.Grade ?? -2) + 1);
+                                            Driver.log.Write(
+                                            $"UpNozzle [{pmpInd}]: {pmp.UpNozzle};\r\n",
+                                            3, true);
+                                        }
+                                        else
+                                            pmp.UpNozzle = -1;
                                         Driver.Pumps[pmpInd] = pmp;
                                     }
                                     Driver.log.Write(
@@ -817,7 +849,10 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                     #endregion
 
                         default:
-                            return json(new { Result = "Unsupported" });
+                        {
+                                Driver.log.Write("ERROR Unsupported" , 0, true);
+                                return json(new { Result = "Unsupported" });
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -826,6 +861,67 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                     return json(new { Result = "Error" });
                 }
             }
+
+            public static Request ParseRequest(string Str)
+            {
+                //{"Operation":"OnDebitPump","TransactionID":"041068198180126185425","Pump":1,"Fuel":98,"Amount":358.00}\r\n
+                //{"Operation":"FillingOverCommit","TransactionID":"041068198180126185425","Result":true,"Error":"Операция выполнена успешно"}\r\n
+                Request result = new Request();
+                var objects = Str.Split(new[] {'{', '}'}, StringSplitOptions.RemoveEmptyEntries);
+                foreach(var obj in objects)
+                {
+                    var fields = obj.Split(new[] {','}, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var pair in fields)
+                    {
+                        var keyValPair = pair.Replace("\"","").Split(new[] {':'}, StringSplitOptions.RemoveEmptyEntries);
+                        if (keyValPair.Length < 2)
+                            continue;
+                        if (keyValPair[0].CompareTo("Operation") == 0)
+                        {
+                            result.Operation = keyValPair[1];
+                        }
+                        else if (keyValPair[0].CompareTo("TransactionID") == 0)
+                        {
+                            result.TransactionID = keyValPair[1];
+                        }
+                        else if (keyValPair[0].CompareTo("Result") == 0)
+                        {
+                        }
+                        else if (keyValPair[0].CompareTo("Error") == 0)
+                        {
+                        }
+                        else if (keyValPair[0].CompareTo("Pump") == 0)
+                        {
+                            int val;
+                            if (int.TryParse(keyValPair[1], out val))
+                                result.Pump = val;
+                        }
+                        else if (keyValPair[0].CompareTo("Fuel") == 0)
+                        {
+                            int val;
+                            if (int.TryParse(keyValPair[1], out val))
+                                result.Fuel = val;
+                        }
+                        else if (keyValPair[0].CompareTo("Amount") == 0)
+                        {
+                            decimal val;
+                            //string valString = Driver.isUnix
+                            //    ? keyValPair[1].Replace(",", ".")
+                            //    : keyValPair[1].Replace(".", ",");
+                            string valString = keyValPair[1].Replace(".", ",");
+                            if (decimal.TryParse(valString, out val))
+                                result.Amount = val;
+                        }
+                        else if (keyValPair[0].CompareTo("UpdatePath") == 0)
+                        {
+                            result.UpdatePath = keyValPair[1];
+                        }
+                    }
+                }
+
+                return result;
+            }
+
             public static object TransesLocker = new object();
             /// <summary>
             /// Коллекция установленных транзакций для хранения параметров транзакции
@@ -982,7 +1078,6 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 }
             }
         }
-
 
         /// <summary>
         /// Клиент TCP сервера
@@ -1184,17 +1279,20 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
             public static string waitMessage(Stream stream, Encoding Encoding, int Timeout = 30000)
             {
                 //   if (stream == null) stream = Stream;
+                //Driver.log.Write($"waitMessage: 1212", 3, true);
                 byte[] data = new byte[max_data_len];
                 int len = 0;
                 int ff_count = 0;
                 int b = -1;
                 var dt = DateTime.Now.AddMilliseconds(Timeout);
                 // var stream = getNetStream(Client);
+                //Driver.log.Write($"waitMessage: 1219 {dt} ? {DateTime.Now}", 3, true);
                 while (dt > DateTime.Now)
                 {
                     //Driver.log.Write($"In while: {1}");
                     try
                     {
+                        //Driver.log.Write($"waitMessage: 1225 {dt} ? {DateTime.Now}", 3, true);
                         if ((b = stream.ReadByte()) >= 0)
                         {
                             //Driver.log.Write($"In if1: {b}");
@@ -1202,6 +1300,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                                 ff_count++;
                             else
                             {
+                                //Driver.log.Write($"waitMessage: 1233 {(byte)b} ? {ff_count}", 3, true);
                                 ff_count = 0;
                                 data[len++] = (byte) b;
                             }
@@ -1209,6 +1308,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
 
                             if (ff_count >= 4)
                             {
+                                //Driver.log.Write($"waitMessage: 1241 {data}", 3, true);
                                 var msg = Encoding.GetString(data, 0, len);
                                 Driver.log.Write($"Получено сообщение: {msg}", 3, true);
                                 return msg;
@@ -1321,7 +1421,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 try
                 {
                     var reqId = Request?.Substring(0, 20);
-                    Driver.log.Write("\r\n\r\n"+Request, 10);
+                    Driver.log.Write("\r\n\r\n"+ Request?.Remove(0, 20), 10);
                     var result = reqId + (HandleRequest?.Invoke(Request?.Remove(0, 20)) ?? "Unsupported");
                     Driver.log.Write("\r\n\r\n" + result, 10);
                     return result;
@@ -1344,6 +1444,8 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                         Driver.log.Write($"Connect", 2, true);
                         base.Stream = GetNetStream(Client);
                         Driver.log.Write($"GetNetStream", 2, true);
+                        waitMessage();
+                        sendMessage("setencoding=" + this.Encoding.HeaderName, this.Stream, Encoding.UTF8);
                         if (waitMessage() == "GET_ID")
                         {
                             sendMessage(ClientID);
