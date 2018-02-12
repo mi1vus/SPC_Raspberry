@@ -167,7 +167,7 @@ namespace ASUDriver
                     //В релизе id расчитывается от MAC адреса
 #if DEBUG
                     // тест на распберри
-                     hw_id = "7E6913831A8CF14E41943B3942C7E347";
+                    hw_id = "7E6913831A8CF14E41943B3942C7E347";
                     // тест у АСУ заправщик  Win
                     // hw_id = "F7D35174678D3B360D3F3EEEA5F91480";
                     // тест у АСУ заправщик Lin
@@ -189,7 +189,7 @@ namespace ASUDriver
                 //ClientID должен задаваться в настройках
                 //HW_ID должен генерироваться библиотекой на основании серийных номеров оборудования  
                 client = new TcpExcangeClient(config["benzuber_station_id"]/*"41065"*/, hw_id);
-                
+
                 //Указываем обработчик для запросов от сервера  
                 client.HandleRequest = new TcpExcangeClient.HandleRequestDelegate(handler);
                 int enc;
@@ -227,11 +227,11 @@ namespace ASUDriver
                     return result;
                 else
                     return ex_code;
-                
+
             }
             private static int get_ex_code(int int_code)
             {
-            int ret;
+                int ret;
                 if (int.TryParse(config["fuel_code_" + int_code], out ret))
                     return ret;
                 else return int_code;
@@ -256,10 +256,10 @@ namespace ASUDriver
                     {
                         #region Ping
 
-                            //Оперция проверки связи
-                            //Интервал между запросами может варьироваться в диапазоне 1-30 сек в зависимости отнастроек сервера.
-                            //По умолчанию каждые 5 сек.  
-                            case "Ping":
+                        //Оперция проверки связи
+                        //Интервал между запросами может варьироваться в диапазоне 1-30 сек в зависимости отнастроек сервера.
+                        //По умолчанию каждые 5 сек.  
+                        case "Ping":
                             {
                                 //В случае, если это первый запрос после запуска - передаем номер версии установленного П.О.
                                 if (!initialized)
@@ -270,7 +270,7 @@ namespace ASUDriver
                                 //Если нет - возвращаем Result = "OK"
                                 //var fillingOvers = Pump.GetFillingOvers();
                                 if (TransOvers.Count == 0 /*&& fillingOvers.Length == 0*/)
-                                    //return json(new { Result = "OK" });
+                                //return json(new { Result = "OK" });
                                 {
                                     var postfix = UpNozzleAuthorize ? " N" : " A";
                                     return json(new { Result = "OK", RunningVersion = "0.1.1 Linux" + postfix, LoadedVersion = "0.1.1 Linux" + postfix });
@@ -284,7 +284,7 @@ namespace ASUDriver
                                     lock (TransOversLocker)
                                     {
                                         if (TransOvers.Count == 0)
-                                            return json(new {Result = "OK"});
+                                            return json(new { Result = "OK" });
                                         var last = TransOvers.Last();
                                         return
                                             json(
@@ -303,17 +303,17 @@ namespace ASUDriver
                                 }
                             }
 
-                            #endregion
+                        #endregion
 
                         #region GetStationInfo
 
-                            //Запрос оперативной информации о АЗС.
-                            case "GetStationInfo":
+                        //Запрос оперативной информации о АЗС.
+                        case "GetStationInfo":
                             {
                                 List<int> inds;
-                                lock (Driver.PumpsLocker)
-                                    inds = Driver.Pumps.Keys.ToList();
-                                foreach(var pmpInd in inds)
+                                lock ( XmlPumpClient.PumpsLocker)
+                                    inds =  XmlPumpClient.Pumps.Keys.ToList();
+                                foreach (var pmpInd in inds)
                                 {
                                     Driver.log.Write("Запрос состояние ТРК: " + pmpInd + "\r\n", 3, true);
 
@@ -328,7 +328,7 @@ namespace ASUDriver
                                     lock (XmlPumpClient.StatusesLocker)
                                         if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pmpInd,
                                                 MESSAGE_TYPES.OnPumpStatusChange), out item) && item != null)
-                                            оnPumpStatusChanged = (OnPumpStatusChange) item;
+                                            оnPumpStatusChanged = (OnPumpStatusChange)item;
 
                                     var е = XmlPumpClient.Fillings;
                                     if (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)
@@ -336,10 +336,10 @@ namespace ASUDriver
                                         Thread myThread2 = new Thread(Driver.CollectOldOrderThread) { IsBackground = true };
                                         myThread2.Start(pmpInd); // запускаем поток
                                     }
-                                    Driver.PumpInfo pmp;
-                                    lock (Driver.PumpsLocker)
+                                    PumpInfo pmp;
+                                    lock ( XmlPumpClient.PumpsLocker)
                                     {
-                                        pmp = Driver.Pumps[pmpInd];
+                                        pmp =  XmlPumpClient.Pumps[pmpInd];
                                         pmp.DispStatus =
                                         (оnPumpStatusChanged?.StatusObj == PUMP_STATUS.PUMP_STATUS_IDLE
                                          ||
@@ -353,27 +353,27 @@ namespace ASUDriver
                                                 : 10;
                                         if (оnPumpStatusChanged?.Grade != -1)
                                         {
-                                            pmp.UpNozzle = (byte) ((оnPumpStatusChanged?.Grade ?? -2) + 1);
+                                            pmp.UpNozzle = (byte)((оnPumpStatusChanged?.Grade ?? -2) + 1);
                                             Driver.log.Write(
                                             $"UpNozzle [{pmpInd}]: {pmp.UpNozzle};\r\n",
                                             3, true);
                                         }
                                         else
                                             pmp.UpNozzle = -1;
-                                        Driver.Pumps[pmpInd] = pmp;
+                                         XmlPumpClient.Pumps[pmpInd] = pmp;
                                     }
                                     Driver.log.Write(
-                                        $"Статус ТРК [{pmpInd}]: {(byte) pmp.DispStatus}; UpNozz: {(byte) ((оnPumpStatusChanged?.Grade ?? -2) + 1)}; Blocked:{pmp.Blocked}\r\n",
+                                        $"Статус ТРК [{pmpInd}]: {(byte)pmp.DispStatus}; UpNozz: {(byte)((оnPumpStatusChanged?.Grade ?? -2) + 1)}; Blocked:{pmp.Blocked}\r\n",
                                         3, true);
                                 }
-                                lock (Driver.PumpsLocker)
+                                lock ( XmlPumpClient.PumpsLocker)
                                 {
                                     var obj = new
                                     {
                                         //Код АЗС
                                         StationID = client.ClientID,
                                         //Список видов топлива
-                                        Fuels = Driver.Fuels.Select(f =>
+                                        Fuels =  XmlPumpClient.Fuels.Select(f =>
                                                 new
                                                 {
                                                     Code = get_ex_code(f.Value.InternalCode),
@@ -382,233 +382,56 @@ namespace ASUDriver
                                                 }
                                         ).ToArray(),
                                         //Список ТРК
-                                        Pumps = Driver.Pumps.Select(p => new
+                                        Pumps =  XmlPumpClient.Pumps.Select(p => new
                                         {
                                             Number = p.Value.Pump,
                                             IsAvailable = p.Value.DispStatus == 0 && !p.Value.Blocked,
                                             MinOrder = 2,
-                                            Nozzles = p.Value.Fuels.Where(fa=> fa.Value.Active).Select(f =>
-                                                    new
-                                                    {
-                                                        FuelCode = get_ex_code(f.Value.InternalCode),
-                                                        NozzleUp = ASUDriver.Driver.NozzToFuelCode(p.Value.Pump, p.Value.UpNozzle) == f.Value.Id
-                                                    }
+                                            Nozzles = p.Value.Fuels.Where(fa => fa.Value.Active).Select(f =>
+                                                     new
+                                                     {
+                                                         FuelCode = get_ex_code(f.Value.InternalCode),
+                                                         NozzleUp = ASUDriver.Driver.NozzToFuelCode(p.Value.Pump, p.Value.UpNozzle) == f.Value.Id
+                                                     }
                                             )
                                         }).ToArray()
                                     };
-                                return json(obj);
+                                    return json(obj);
                                 }
                             }
 
-                            #endregion
+                        #endregion
 
                         #region OnDebitPump
 
-                            case "OnDebitPump":
+                        case "OnDebitPump":
                             {
-                                Driver.log.Write("Bzer: Запрос на установку заказа ТРК: " + op.Pump.Value + "\r\n", 0, true);
-                                var fuel = Driver.Fuels.First(t => t.Value.Id == get_int_code(op?.Fuel.Value ?? -1));
-                                Driver.log.Write("Bzer: Конвертируем код продукта: " + op?.Fuel.Value+ "=>"+ fuel.Value.InternalCode+ "\r\n", 0, true);
-                                var shift = XmlPumpClient.ReadAndUpdateCurrentShift();
-                                
-                                //TODO: Передача транзакции в систему управления
-                                lock (Driver.TransCounterLocker)
-                                //{
-                                //    if (shift != null && Driver.TransCounter < shift.DocNum)
-                                //    {
-                                //        Driver.TransCounter = shift.DocNum;
-                                //    }
-
-                                //    Driver.TransCounter += 2;
-                                //    shift.DocNum = Driver.TransCounter - 1;
-                                //}
-                                //++shift.ShiftDocNum;
-                                //XmlPumpClient.WriteOrReplaceToFile(1, shift.ShiftDocNum.ToString());
-                                //XmlPumpClient.WriteOrReplaceToFile(2, shift.DocNum.ToString());
 
                                 if (!Transes.ContainsKey(op.TransactionID))
                                 {
+                                    var shift = XmlPumpClient.ReadAndUpdateCurrentShift();
+                                    op.Shift = shift;
+
                                     //Добавляем новую транзакцию в хранилище
                                     lock (TransesLocker)
                                         Transes.Add(op.TransactionID, op);
 
-                                    object item = null;
-                                        Driver.log.Write("Bzer: Захват ТРК: " + op.Pump.Value + "\r\n", 0, true);
+                                    //Поток ожидания окончания налива от АСУ
+                                    Thread myThread2 = new Thread(Driver.WaitCollectBenzuber) { IsBackground = true };
+                                    myThread2.Start(op.TransactionID);
 
-                                        lock (XmlPumpClient.StatusesLocker)
-                                            if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
-                                                MESSAGE_TYPES.OnDataInit), out item) || item == null)
-                                            {
-                                                XmlPumpClient.InitData(Driver.terminal);
-                                            }
-
-                                    Driver.PumpInfo pump;
-                                    lock (Driver.PumpsLocker)
-                                    {
-                                        pump = Driver.Pumps[op.Pump.Value];
-                                        pump.Blocked = true;
-                                        pump.BlockInitTime = DateTime.Now;
-                                        Driver.Pumps[op.Pump.Value] = pump;
-                                    }
-                                    XmlPumpClient.Init(Driver.terminal, op.Pump.Value, op.Pump.Value,
-                                            XmlPumpClient.WaitAnswerTimeout, 1);
-
-                                    Driver.log.Write(
-$@"Установка дозы на ТРК: {op.Pump.Value}, 
-сгенерирован TransID: {shift.DocNum}
-RRN: {op.TransactionID}\r\n", 1, true);
-
-                                    //var prePaid = Order.Price*Order.Quantity;
-                                    var discount = 0;//100;//(Order.BasePrice - Order.Price)*Order.Quantity;
-                                    var fuel1 = Driver.Fuels.First(t => t.Value.Id == get_int_code(op?.Fuel.Value ?? -1));
-                                    int allowed = 0;
-                                    lock (Driver.PumpsLocker)
-                                        foreach (var pumpFuel in Driver.Pumps[op.Pump.Value].Fuels.Where(fa=>fa.Value.Active))
-                                        {
-                                            allowed += 1 << (pumpFuel.Value.Id - 1);
-                                        }
-
-                                    Driver.log.Write(
-$@"WaitCollectThread:SaleDataSale:\r\n
-terminal: {Driver.terminal}\r\n
-PumpNo: {op.Pump}\r\n
-allowed: {allowed}\r\n
-Amount: {op.Amount}\r\n
-OverAmount: {op.Amount}\r\n
-discount: {discount}\r\n
-Quantity: {op.Amount / fuel.Value.Price}\r\n
-OverQuantity: {op.Amount / fuel.Value.Price}\r\n
-PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
-OrderRRN: {op.TransactionID.PadLeft(20, '0')}\r\n
-ProductCode: {fuel.Value.InternalCode/*op.Fuel*/}\r\n
-Key: {fuel.Key}\r\n
-fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n", 2, true
-                                        );
-
-
-                                    //XmlPumpClient.SaleDataSale(Driver.terminal, op.Pump.Value, allowed,
-                                    //            op.Amount.Value, op.Amount.Value, discount,
-                                    //            op.Amount.Value / fuel.Value.Price, op.Amount.Value / fuel.Value.Price, PAYMENT_TYPE.Cash,
-                                    //            op.TransactionID.PadLeft(20, '0'), /*op.Fuel.Value*/ fuel.Value.InternalCode, fuel.Key, (int)(fuel.Value.Price * 100), "", true, 1);
-
-                                    item = null;
-                                        Driver.log.Write("Bzer: Освобождение ТРК: " + op.Pump + "\r\n", 0, true);
-
-                                        lock (XmlPumpClient.StatusesLocker)
-                                            if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
-                                            MESSAGE_TYPES.OnDataInit), out item) || item == null)
-                                            {
-                                                XmlPumpClient.InitData(Driver.terminal);
-                                            }
-
-                                    lock (Driver.PumpsLocker)
-                                    {
-                                        pump = Driver.Pumps[op.Pump.Value];
-                                        pump.Blocked = false;
-                                        pump.BlockInitTime = null;
-                                        Driver.Pumps[op.Pump.Value] = pump;
-                                    }
-                                    int pmp = op.Pump.Value;
-                                        XmlPumpClient.Init(Driver.terminal, pmp, -1, XmlPumpClient.WaitAnswerTimeout, 1);
-
-                                    var res2 = XmlPumpClient.Statuses;
-                                    var res3 = XmlPumpClient.Fillings;
-                                      /*        
-                                    XmlPumpClient.FiscalEventReceipt(Driver.terminal, op.Pump.Value,//order.PumpNo,
-                                        shift.ShiftDocNum, shift.DocNum, shift.Number,
-                                        op.Amount.Value,//(endMessage?.Money ?? 0) / 100m, 
-                                        0, PAYMENT_TYPE.Cash, op.TransactionID.PadLeft(20, '0')//rder.OrderRRN
-                                        , 1);
-
-Driver.log.Write(
-$@"Bzer: чек:
-terminal: {Driver.terminal}
-Pump: {op.Pump.Value}
-GetShiftDocNum: {shift.ShiftDocNum}
-GetDocNum: {shift.DocNum}
-GetShiftNum: {shift.Number}
-OverAmount: {op.Amount.Value}
-Refund: {0}
-PAYMENT_TYPE: {PAYMENT_TYPE.Cash.ToString()}
-OrderRRN: {op.TransactionID.PadLeft(20, '0'), 2, true);  
-
-                                    ++shift.DocNum;
-                                    ++shift.ShiftDocNum;
-                                    XmlPumpClient.WriteOrReplaceToFile(1, shift.ShiftDocNum.ToString());
-                                    XmlPumpClient.WriteOrReplaceToFile(2, shift.DocNum.ToString()); */
-
-                                    Driver.log.Write(
-$@"Authorize:
-терминал: {Driver.terminal}
-колонка: {op.Pump.Value}
-TransCounter: {shift.DocNum}
-дост. пистолеты: {allowed}
-Nazzle: {fuel.Value.InternalCode/*op.Fuel.Value*/}
-RNN: {op.TransactionID.PadLeft(20, '0')}
-Limit: {(int)((op.Amount.Value*100)/ fuel.Value.Price)}
-Unit: {DELIVERY_UNIT.Volume.ToString()}
-WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
-        , 2, true);
-
-                                    //TODO Проба со скидками!!!!
-                                    string errMsg = "";
-                                        if (!XmlPumpClient.Authorize(Driver.terminal, op.Pump.Value, shift.DocNum,
-                                            //TODO не передается
-                                            allowed, ASUDriver.Driver.FuelCodeToNuz(op.Pump.Value, fuel.Value.InternalCode)/*op.Fuel.Value*/, op.TransactionID.PadLeft(20, '0'), (int)((op.Amount.Value*100)/ fuel.Value.Price), DELIVERY_UNIT.Volume,/*(int) (op.Amount.Value*100), DELIVERY_UNIT.Money,*/
-                                            XmlPumpClient.WaitAnswerTimeout, out errMsg))
-                                        {
-                                            Driver.log.Write($"SetDoseCallback:Authorize: {errMsg}\r\n", 2, true);                                            return json(new { Result = "Error" });
-                                        }
-
-                                    Driver.log.Write(
-$@"Presale:
-терминал: {Driver.terminal}
-колонка: {op.Pump.Value}
-дост. пистолеты: {allowed}
-сумма руб: {op.Amount.Value}
-скидка: {discount}
-кол-во литры: {(int)(op.Amount.Value / fuel.Value.Price)}
-тип оплаты: {XmlPumpClient.PaymentCodeToType(1).ToString()}
-рнн: {op.TransactionID.PadLeft(20, '0')}
-продукт код: {fuel.Value.InternalCode/*op.Fuel.Value*/}
-продукт: {fuel.Key}
-продукт цена коп: {(int)(fuel.Value.Price * 100)}
-WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
-
-        , 2, true);
-                                    //TODO Проба со скидками!!!!
-                                    if (!XmlPumpClient.Presale(Driver.terminal, op.Pump.Value, allowed, op.Amount.Value,
-                                            //TODO не передается
-                                            discount, (int)(op.Amount.Value / fuel.Value.Price), XmlPumpClient.PaymentCodeToType(1),
-                                            op.TransactionID.PadLeft(20, '0'), fuel.Value.InternalCode/*op.Fuel.Value*/, fuel.Key,
-                                            //TODO не передается
-                                            (int)(fuel.Value.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
-                                        {
-                                            Driver.log.Write("Bzer: SetDoseCallback:Presale: нет о твета на Presale\r\n", 0, true);
-                                            return json(new { Result = "Error" });
-                                        }
-
-
-                                        Driver.log.Write("Bzer: Hалив разрешен\r\n", 0, true);
-
-                                        op.Shift = shift;
-
-                                        //Поток ожидания окончания налива от АСУ
-                                        Thread myThread2 = new Thread(Driver.WaitCollectBenzuber) { IsBackground = true };
-                                        myThread2.Start(op.TransactionID);
-
-                                        //Передаем "ОК" если заказ успешно передан в систему управления
-                                        return json(new { Result = "OK" });
+                                    //Передаем "ОК" если заказ успешно передан в систему управления
+                                    return json(new { Result = "OK" });
                                 }
                                 else
                                     return json(new { Result = "Error" });
                             }
 
-                            #endregion
+                        #endregion
 
                         #region FillingOverCommit
 
-                            case "FillingOverCommit":
+                        case "FillingOverCommit":
                             {
                                 //var r1 = Pump;
                                 var r2 = Driver.TransMemory;
@@ -623,7 +446,7 @@ WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
                                     var op_in_storage = Transes[op.TransactionID];
                                     var over_op_in_storage = TransOvers[op.TransactionID];
                                     var fuel_code = get_int_code(op_in_storage?.Fuel.Value ?? -1);
-                                    var fuel = Driver.Fuels.First(t => t.Value.Id == fuel_code);
+                                    var fuel =  XmlPumpClient.Fuels.First(t => t.Value.Id == fuel_code);
                                     decimal overSumm;
                                     decimal overQuantity;
 
@@ -646,15 +469,15 @@ WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
                                     //    overSumm = over_op_in_storage.Amount.Value;//(DocKindCode != 4) ? (decimal)Amount / 100 : -(decimal)Amount / 100;
                                     //    overQuantity = op_in_storage.Amount.Value/fuel.Value.Price;
                                     //}
-Driver.log.Write("Bzer: Сохранение документа, TransID: " + op.TransactionID
-+ "\r\nНомер документа:    " +op_in_storage.Shift.DocNum
-+ "\r\nТип документа:      " +op_in_storage.Operation
-+ "\r\nСумма:              " + overSumm
-+ "\r\nКоличество:         " + overQuantity
-+ "\r\nНомер продукта:     " +op_in_storage.Fuel
-+ "\r\nID PumpNo:          " +op_in_storage.Pump
-+ "\r\nID OrderRRN:        " + op.TransactionID.PadLeft(20, '0')
-+ "\r\n", 2, true);
+                                    Driver.log.Write("Bzer: Сохранение документа, TransID: " + op.TransactionID
+                                    + "\r\nНомер документа:    " + op_in_storage.Shift.DocNum
+                                    + "\r\nТип документа:      " + op_in_storage.Operation
+                                    + "\r\nСумма:              " + overSumm
+                                    + "\r\nКоличество:         " + overQuantity
+                                    + "\r\nНомер продукта:     " + op_in_storage.Fuel
+                                    + "\r\nID PumpNo:          " + op_in_storage.Pump
+                                    + "\r\nID OrderRRN:        " + op.TransactionID.PadLeft(20, '0')
+                                    + "\r\n", 2, true);
 
                                     //++transCounter;
 
@@ -662,56 +485,56 @@ Driver.log.Write("Bzer: Сохранение документа, TransID: " + op
                                     //    return 1;
 
                                     var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
-                                        int allowed = 0;
-                                    lock (Driver.PumpsLocker)
-                                        foreach (var pumpFuel in Driver.Pumps[op_in_storage.Pump.Value].Fuels.Where(fa => fa.Value.Active))
+                                    int allowed = 0;
+                                    lock ( XmlPumpClient.PumpsLocker)
+                                        foreach (var pumpFuel in  XmlPumpClient.Pumps[op_in_storage.Pump.Value].Fuels.Where(fa => fa.Value.Active))
                                         {
                                             allowed += 1 << (pumpFuel.Value.Id - 1);
                                         }
-//                                    if (refund)
-//                                    {
-//                                        Driver.log.Write(
-//                                        $@"Bzer: WaitCollectThread:SaleDataSale:\r\n
-//terminal: {Driver.terminal}\r\n
-//PumpNo: {op_in_storage.Pump}\r\n
-//allowed: {allowed}\r\n
-//Amount: {op_in_storage.Amount}\r\n
-//OverAmount: {overSumm}\r\n
-//discount: {discount}\r\n
-//Quantity: {op_in_storage.Amount.Value / fuel.Value.Price}\r\n
-//OverQuantity: {overQuantity}\r\n
-//PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
-//OrderRRN: {op.TransactionID.PadLeft(20, '0')}\r\n
-//ProductCode: {op_in_storage.Fuel.Value}\r\n
-//Key: {fuel.Key}\r\n
-//fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n", 2, true);
+                                    //                                    if (refund)
+                                    //                                    {
+                                    //                                        Driver.log.Write(
+                                    //                                        $@"Bzer: WaitCollectThread:SaleDataSale:\r\n
+                                    //terminal: {XmlPumpClient.terminal}\r\n
+                                    //PumpNo: {op_in_storage.Pump}\r\n
+                                    //allowed: {allowed}\r\n
+                                    //Amount: {op_in_storage.Amount}\r\n
+                                    //OverAmount: {overSumm}\r\n
+                                    //discount: {discount}\r\n
+                                    //Quantity: {op_in_storage.Amount.Value / fuel.Value.Price}\r\n
+                                    //OverQuantity: {overQuantity}\r\n
+                                    //PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
+                                    //OrderRRN: {op.TransactionID.PadLeft(20, '0')}\r\n
+                                    //ProductCode: {op_in_storage.Fuel.Value}\r\n
+                                    //Key: {fuel.Key}\r\n
+                                    //fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n", 2, true);
 
-//                                        //TODO Проба со скидками!!!!
+                                    //                                        //TODO Проба со скидками!!!!
 
-//                                        XmlPumpClient.SaleDataSale(Driver.terminal, op_in_storage.Pump.Value,
-//                                            allowed,
-//                                            op_in_storage.Amount.Value, overSumm, discount,
-//                                            op_in_storage.Amount.Value / fuel.Value.Price, overQuantity,
-//                                            PAYMENT_TYPE.Cash,
-//                                            op.TransactionID.PadLeft(20, '0'), op_in_storage.Fuel.Value,
-//                                            fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
-//                                    }
+                                    //                                        XmlPumpClient.SaleDataSale(XmlPumpClient.terminal, op_in_storage.Pump.Value,
+                                    //                                            allowed,
+                                    //                                            op_in_storage.Amount.Value, overSumm, discount,
+                                    //                                            op_in_storage.Amount.Value / fuel.Value.Price, overQuantity,
+                                    //                                            PAYMENT_TYPE.Cash,
+                                    //                                            op.TransactionID.PadLeft(20, '0'), op_in_storage.Fuel.Value,
+                                    //                                            fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
+                                    //                                    }
 
 
                                     //TODO Проба со скидками!!!!
 
-                                    XmlPumpClient.SaleDataSale(Driver.terminal, op_in_storage.Pump.Value, allowed, op_in_storage.Amount.Value, overSumm, discount, op_in_storage.Amount.Value / fuel.Value.Price, overQuantity,
+                                    XmlPumpClient.SaleDataSale(XmlPumpClient.terminal, op_in_storage.Pump.Value, allowed, op_in_storage.Amount.Value, overSumm, discount, op_in_storage.Amount.Value / fuel.Value.Price, overQuantity,
                                         PAYMENT_TYPE.Cash, op.TransactionID.PadLeft(20, '0'), op_in_storage.Fuel.Value, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
 
 
 
-                                    //XmlPumpClient.SaleDataSale(Driver.terminal, order.PumpNo, allowed,
+                                    //XmlPumpClient.SaleDataSale(XmlPumpClient.terminal, order.PumpNo, allowed,
                                     //    order.Amount, order.OverAmount, discount,
                                     //    order.Quantity, order.OverQuantity, PAYMENT_TYPE.Cash,
                                     //    order.OrderRRN, order.ProductCode, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
                                     //Driver.log.Write(
                                     //    "WaitCollectThread:SaleDataSale:\r\n" +
-                                    //    $"terminal: {Driver.terminal}\r\n" +
+                                    //    $"terminal: {XmlPumpClient.terminal}\r\n" +
                                     //    $"PumpNo: {PumpNo}\r\n" +
                                     //    $"allowed: {allowed}\r\n" +
                                     //    $"Amount: {PreSum}\r\n" +
@@ -726,7 +549,7 @@ Driver.log.Write("Bzer: Сохранение документа, TransID: " + op
                                     //    $"fuelPrice: {(int)(Price/*fuel.Value.Price*/ * 100)}\r\n", true
                                     //    );
 
-                                    //XmlPumpClient.FiscalEventReceipt(Driver.terminal, order.PumpNo,
+                                    //XmlPumpClient.FiscalEventReceipt(XmlPumpClient.terminal, order.PumpNo,
                                     //    GetShiftDocNum(), GetDocNum(), GetShiftNum(),
                                     //    (endMessage?.Money ?? 0) / 100m, 0, PAYMENT_TYPE.Cash, order.OrderRRN, 1);
                                     //Driver.log.Write.Write($"чек:\r\n" +
@@ -740,36 +563,36 @@ Driver.log.Write("Bzer: Сохранение документа, TransID: " + op
 
 
                                     object item = null;
-                                            Driver.log.Write("Bzer: Освобождение ТРК: " + op_in_storage.Pump.Value + "\r\n", 0, true);
+                                    Driver.log.Write("Bzer: Освобождение ТРК: " + op_in_storage.Pump.Value + "\r\n", 0, true);
 
-                                        lock (XmlPumpClient.StatusesLocker)
-                                            if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
-                                                MESSAGE_TYPES.OnDataInit), out item) || item == null)
-                                                {
-                                                    XmlPumpClient.InitData(Driver.terminal);
-                                                }
+                                    lock (XmlPumpClient.StatusesLocker)
+                                        if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
+                                            MESSAGE_TYPES.OnDataInit), out item) || item == null)
+                                        {
+                                            XmlPumpClient.InitData(XmlPumpClient.terminal);
+                                        }
 
 
-                                    Driver.PumpInfo pump;
-                                    lock (Driver.PumpsLocker)
+                                    PumpInfo pump;
+                                    lock ( XmlPumpClient.PumpsLocker)
                                     {
-                                        pump = Driver.Pumps[op_in_storage.Pump.Value];
+                                        pump =  XmlPumpClient.Pumps[op_in_storage.Pump.Value];
                                         pump.Blocked = false;
                                         pump.BlockInitTime = null;
-                                        Driver.Pumps[op_in_storage.Pump.Value] = pump;
+                                         XmlPumpClient.Pumps[op_in_storage.Pump.Value] = pump;
                                     }
                                     int pmp = op_in_storage.Pump.Value;
-                                            XmlPumpClient.Init(Driver.terminal, pmp, -1, XmlPumpClient.WaitAnswerTimeout, 1);
-                                            //Driver.Pumps[Pump] = pump;
+                                    XmlPumpClient.Init(XmlPumpClient.terminal, pmp, -1, XmlPumpClient.WaitAnswerTimeout, 1);
+                                    // XmlPumpClient.Pumps[Pump] = pump;
 
-                                            //label1.Text += "Освобождение ТРК: " + Pump + "\r\n";
+                                    //label1.Text += "Освобождение ТРК: " + Pump + "\r\n";
                                     //Driver.log.Write("Bzer: изм. статуса\r\n", 0, true);
 
-                                        //var res = XmlPumpClient.answers;
-                                        var res2 = XmlPumpClient.Statuses;
-                                        var res3 = XmlPumpClient.Fillings;
+                                    //var res = XmlPumpClient.answers;
+                                    var res2 = XmlPumpClient.Statuses;
+                                    var res3 = XmlPumpClient.Fillings;
 
-                                        XmlPumpClient.ClearAllTransactionAnswers(op_in_storage.Pump.Value, op.TransactionID.PadLeft(20, '0'));
+                                    XmlPumpClient.ClearAllTransactionAnswers(op_in_storage.Pump.Value, op.TransactionID.PadLeft(20, '0'));
                                     if (true)
                                     {
                                         var last_trans_in_shift_src = XmlPumpClient.ReadFromFile(1);
@@ -794,12 +617,12 @@ Driver.log.Write("Bzer: Сохранение документа, TransID: " + op
                                         XmlPumpClient.WriteOrReplaceToFile(1, (++last_trans_in_shift).ToString());
                                         XmlPumpClient.WriteOrReplaceToFile(2, op_in_storage.Shift.DocNum.ToString());
 
-                                        XmlPumpClient.FiscalEventReceipt(Driver.terminal, op_in_storage.Pump.Value/*order.PumpNo*/,
+                                        XmlPumpClient.FiscalEventReceipt(XmlPumpClient.terminal, op_in_storage.Pump.Value/*order.PumpNo*/,
                                             last_trans_in_shift, op_in_storage.Shift.DocNum, op_in_storage.Shift.Number,
                                            overSumm/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/, 1);
                                         Driver.log.Write(
 $@"Bzer: чек:\r\n
-terminal: {Driver.terminal}\r\n
+terminal: {XmlPumpClient.terminal}\r\n
 Pump: {op_in_storage.Pump}\r\n
 GetShiftDocNum: {last_trans_in_shift}\r\n
 GetDocNum: {op_in_storage.Shift.DocNum}\r\n
@@ -811,23 +634,23 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                                     }
                                     //Thread.Sleep(30000);
                                     //Удаляем удачно завершенную транзакцию
-                                        lock (TransesLocker)
-                                            Transes.Remove(op.TransactionID);
-                                        lock (TransOversLocker)
-                                            TransOvers.Remove(op.TransactionID);
+                                    lock (TransesLocker)
+                                        Transes.Remove(op.TransactionID);
+                                    lock (TransOversLocker)
+                                        TransOvers.Remove(op.TransactionID);
 
                                     return json(new { Result = "OK" });
-                                    }
-                                    else
+                                }
+                                else
 #warning Не совсем корректно передавать OK в случае отсутствия транзакции
                                     return json(new { Result = "OK" });
                             }
 
-                            #endregion
+                        #endregion
 
                         #region CancelTransaction
 
-                            case "CancelTransaction":
+                        case "CancelTransaction":
                             {
                                 //TODO: Отмена транзакций
                                 var id = op.TransactionID;
@@ -835,24 +658,24 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                                 return json(new { Result = "Error" });
                             }
 
-                            #endregion
+                        #endregion
 
                         #region LoadUpdate
 
                         case "LoadUpdate":
-                        {
-                            //TODO: Загрузка обновлений с сервера
-                            //Путь до обновления указывается в переменной op.UpdatePath
-                            return json(new { Result = "OK" });
-                        }
+                            {
+                                //TODO: Загрузка обновлений с сервера
+                                //Путь до обновления указывается в переменной op.UpdatePath
+                                return json(new { Result = "OK" });
+                            }
 
-                    #endregion
+                        #endregion
 
                         default:
-                        {
-                                Driver.log.Write("ERROR Unsupported" , 0, true);
+                            {
+                                Driver.log.Write("ERROR Unsupported", 0, true);
                                 return json(new { Result = "Unsupported" });
-                        }
+                            }
                     }
                 }
                 catch (Exception ex)
@@ -867,13 +690,13 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 //{"Operation":"OnDebitPump","TransactionID":"041068198180126185425","Pump":1,"Fuel":98,"Amount":358.00}\r\n
                 //{"Operation":"FillingOverCommit","TransactionID":"041068198180126185425","Result":true,"Error":"Операция выполнена успешно"}\r\n
                 Request result = new Request();
-                var objects = Str.Split(new[] {'{', '}'}, StringSplitOptions.RemoveEmptyEntries);
-                foreach(var obj in objects)
+                var objects = Str.Split(new[] { '{', '}' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var obj in objects)
                 {
-                    var fields = obj.Split(new[] {','}, StringSplitOptions.RemoveEmptyEntries);
+                    var fields = obj.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
                     foreach (var pair in fields)
                     {
-                        var keyValPair = pair.Replace("\"","").Split(new[] {':'}, StringSplitOptions.RemoveEmptyEntries);
+                        var keyValPair = pair.Replace("\"", "").Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
                         if (keyValPair.Length < 2)
                             continue;
                         if (keyValPair[0].CompareTo("Operation") == 0)
@@ -1296,13 +1119,13 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                         if ((b = stream.ReadByte()) >= 0)
                         {
                             //Driver.log.Write($"In if1: {b}");
-                            if ((byte) b == 0xFF)
+                            if ((byte)b == 0xFF)
                                 ff_count++;
                             else
                             {
                                 //Driver.log.Write($"waitMessage: 1233 {(byte)b} ? {ff_count}", 3, true);
                                 ff_count = 0;
-                                data[len++] = (byte) b;
+                                data[len++] = (byte)b;
                             }
                             //Driver.log.Write($"In if2: {ff_count}");
 
@@ -1421,7 +1244,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 try
                 {
                     var reqId = Request?.Substring(0, 20);
-                    Driver.log.Write("\r\n\r\n"+ Request?.Remove(0, 20), 10);
+                    Driver.log.Write("\r\n\r\n" + Request?.Remove(0, 20), 10);
                     var result = reqId + (HandleRequest?.Invoke(Request?.Remove(0, 20)) ?? "Unsupported");
                     Driver.log.Write("\r\n\r\n" + result, 10);
                     return result;

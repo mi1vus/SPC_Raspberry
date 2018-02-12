@@ -220,7 +220,7 @@ namespace ASUDriver
                     log.Write(string.Format("Запрос на установку заказа. PumpNum: {0}, Fuel: {1}, TransID: {2}, Amount: {3}",
                         PumpNum, Fuel, TransID, Amount));
 
-                    var product = (from fuel in Driver.Fuels
+                    var product = (from fuel in  XmlPumpClient.Fuels
                                    where fuel.Value.Id == get_int_code(Fuel)
                                    select fuel.Value).SingleOrDefault();
                     if (product.Name == null)
@@ -453,9 +453,9 @@ namespace ASUDriver
             }
             ).Start();
             int cnt;
-            lock (Driver.PumpsLocker)
-            cnt = Driver.Pumps.Count;
-            log.Write($"F:{ASUDriver.Driver.Fuels.Count} P:{cnt}", 0, true);
+            lock ( XmlPumpClient.PumpsLocker)
+            cnt =  XmlPumpClient.Pumps.Count;
+            log.Write($"F:{ASUDriver. XmlPumpClient.Fuels.Count} P:{cnt}", 0, true);
         }
 
         private int get_int_code(int ex_code) => int.Parse((from code in config.GetValueNames("fuel_code_") where config[code] == ex_code.ToString() select code.Replace("fuel_code_", ""))?.SingleOrDefault() ?? "-1");
@@ -469,20 +469,20 @@ namespace ASUDriver
                 try
                 {
                     int cnt;
-                    lock (Driver.PumpsLocker)
-                        cnt = Driver.Pumps.Count;
-                    log.Write($"Получение информации о АЗС: F:{ASUDriver.Driver.Fuels.Count} P:{cnt}", 0, true);
+                    lock ( XmlPumpClient.PumpsLocker)
+                        cnt =  XmlPumpClient.Pumps.Count;
+                    log.Write($"Получение информации о АЗС: F:{ASUDriver. XmlPumpClient.Fuels.Count} P:{cnt}", 0, true);
                     var info = new StationGate.StationInformaton()
                     {
-                        Fuels = new List<StationGate.StationInformaton.FuelInfo>(from fuel in ASUDriver.Driver.Fuels select new StationGate.StationInformaton.FuelInfo { Code = get_ex_code(fuel.Value.Id), Name = fuel.Value.Name, Price = fuel.Value.Price })
+                        Fuels = new List<StationGate.StationInformaton.FuelInfo>(from fuel in ASUDriver. XmlPumpClient.Fuels select new StationGate.StationInformaton.FuelInfo { Code = get_ex_code(fuel.Value.Id), Name = fuel.Value.Name, Price = fuel.Value.Price })
                     };
 
                     foreach (var fuel in info.Fuels) log.Write($"{fuel.Code}. {fuel.Name} = {fuel.Price:0.00}р");
 
                     List<StationGate.StationInformaton.PumpInfo> pumps = new List<StationGate.StationInformaton.PumpInfo>();
-                    List<KeyValuePair<int, Driver.PumpInfo>> driverPumps;
-                    lock (Driver.PumpsLocker)
-                        driverPumps = Driver.Pumps.ToList();
+                    List<KeyValuePair<int, PumpInfo>> driverPumps;
+                    lock ( XmlPumpClient.PumpsLocker)
+                        driverPumps =  XmlPumpClient.Pumps.ToList();
                     foreach (var p in driverPumps)
                     {
                         var state = pump.GetPumpInformation(p.Value.Pump);

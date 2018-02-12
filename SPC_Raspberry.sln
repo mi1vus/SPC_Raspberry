@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SPC_Raspberry", "SPC_Raspbe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ASUDriver", "ASUDriver\ASUDriver.csproj", "{FC235365-8B16-448F-AE33-9C66FB470E34}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XmlPumpClient", "XmlPumpClient\XmlPumpClient.csproj", "{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,6 +33,14 @@ Global
 		{FC235365-8B16-448F-AE33-9C66FB470E34}.Release|Any CPU.Build.0 = Release|Any CPU
 		{FC235365-8B16-448F-AE33-9C66FB470E34}.Release|x86.ActiveCfg = Release|x86
 		{FC235365-8B16-448F-AE33-9C66FB470E34}.Release|x86.Build.0 = Release|x86
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Debug|x86.Build.0 = Debug|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Release|x86.ActiveCfg = Release|Any CPU
+		{AC498DDB-BF68-4336-B9F3-B2D8EB7F24EF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

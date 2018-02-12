@@ -586,7 +586,7 @@ $"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n"
         public ProductInformation[] GetProducts()
         {            
             List<ProductInformation> ret = new List<ProductInformation>();
-            var prods = Driver.Fuels;
+            var prods =  XmlPumpClient.Fuels;
             foreach (var prod in prods)
             {
                 ret.Add(new ProductInformation() { Name = prod.Value.Name, BasePrice = prod.Value.Price, Code = prod.Value.Id});
@@ -610,14 +610,14 @@ $"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n"
                     return pumpInformationMem[No].Value;
             }
             //#warning Дописать обработку получения активного топлива
-            lock (Driver.PumpsLocker)
-                if (!Driver.Pumps.ContainsKey(No))
+            lock ( XmlPumpClient.PumpsLocker)
+                if (! XmlPumpClient.Pumps.ContainsKey(No))
                     return new PumpInformation();
           //  log.Write("GetPumpInformation" + No.ToString());
 
-            Dictionary<string, Driver.FuelInfo> fuels;
-            lock (Driver.PumpsLocker)
-                fuels = Driver.Pumps[No].Fuels;
+            Dictionary<string, FuelInfo> fuels;
+            lock ( XmlPumpClient.PumpsLocker)
+                fuels =  XmlPumpClient.Pumps[No].Fuels;
             
 
           //  main.FuelListItem[] fuels;

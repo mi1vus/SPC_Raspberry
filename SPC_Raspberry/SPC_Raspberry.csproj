@@ -97,6 +97,10 @@
       <Project>{fc235365-8b16-448f-ae33-9c66fb470e34}</Project>
       <Name>ASUDriver</Name>
     </ProjectReference>
+    <ProjectReference Include="..\XmlPumpClient\XmlPumpClient.csproj">
+      <Project>{ac498ddb-bf68-4336-b9f3-b2d8eb7f24ef}</Project>
+      <Name>XmlPumpClient</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

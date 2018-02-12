@@ -10,6 +10,7 @@ using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
+using ProjectSummer.Repository;
 
 namespace ASUDriver
 {
@@ -221,6 +222,34 @@ namespace ASUDriver
         public int ErrorCode { get; set; }
     }
 
+    public struct FuelInfo
+    {
+        public int Id;
+        public int InternalCode;
+        public bool Active;
+        public string Name;
+        public decimal Price;
+        public override string ToString() => $"Id = {Id:00}, InternalCode = {InternalCode:00}, Name = {Name}, Price = {Price:0.00}р";
+    }
+
+    public struct PumpInfo
+    {
+        public int Pump;
+        public bool Blocked;
+        public int DispStatus;
+        public int UpNozzle;
+#warning В случае если на ТРК два продукта с одинаковым внешним кодом будет полная хрень!!!
+        public Dictionary<string, FuelInfo> Fuels;
+        public DateTime? BlockInitTime;
+        //public void OnBlockTimerEvent(object source, ElapsedEventArgs e)
+        //{
+        //    Console.WriteLine("The Elapsed event was raised at {0}", e.SignalTime);
+        //    this.BlockTimer.Enabled = false;
+        //    this.BlockTimer.Stop();
+        //    this.Blocked = false;
+        //}
+    }
+
     public class XmlPumpClient
     {
         public const int BuffSize = 65536;
@@ -244,6 +273,13 @@ namespace ASUDriver
         public static object FillingsLocker = new object();
         public static Dictionary<Tuple<int, MESSAGE_TYPES>, List<object>> Fillings;
 
+        public static object PumpsLocker = new object();
+        public static Dictionary<int, PumpInfo> Pumps = new Dictionary<int, PumpInfo>();
+        public static Dictionary<string, FuelInfo> Fuels = new Dictionary<string, FuelInfo>();
+        public static int terminal = 1;
+
+        public static Logger log = new Logger("XmlPumpClient");
+
         public static void StartClient(string bHostB2, int iPort)
         {
             Client = new TcpClient();
@@ -258,7 +294,7 @@ namespace ASUDriver
             }
             catch (Exception ex)
             {
-                Driver.log.Write("XMLPump: ERROR:" + ex + "\r\n", 0, true);
+                log.Write("XMLPump: ERROR:" + ex + "\r\n", 0, true);
             }
             finally
             {
@@ -410,7 +446,7 @@ namespace ASUDriver
                 }
                 catch(Exception ex)
                 {
-                    Driver.log.Write("XMLPump: Подключение прервано! ERROR:" + ex + "\r\n", 0, true);
+                    log.Write("XMLPump: Подключение прервано! ERROR:" + ex + "\r\n", 0, true);
                     Disconnect();
                 }
             }
@@ -571,7 +607,7 @@ namespace ASUDriver
                 }
                 catch (Exception ex)
                 {
-                    Driver.log.Write("XMLPump: Подключение прервано! ERROR:" + ex + "\r\n", 0, true);
+                    log.Write("XMLPump: Подключение прервано! ERROR:" + ex + "\r\n", 0, true);
                     Disconnect();
                 }
             }
@@ -587,10 +623,10 @@ namespace ASUDriver
                 try
                 {
                     List<int> inds;
-                    lock (Driver.PumpsLocker)
-                        inds = Driver.Pumps.Keys.ToList();
+                    lock (PumpsLocker)
+                        inds = Pumps.Keys.ToList();
 
-                    InitData(Driver.terminal);
+                    InitData(terminal);
 
                     object item;
                     ////lock (PumpsLocker)
@@ -598,7 +634,7 @@ namespace ASUDriver
                     //if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                     //    MESSAGE_TYPES.OnDataInit), out item) || item == null)
                     //{
-                    //    InitData(Driver.terminal);
+                    //    InitData(XmlPumpClient.terminal);
                     //}
                     OnDataInit onDataInit = default(OnDataInit);
                     if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit),
@@ -616,16 +652,16 @@ namespace ASUDriver
                         //	1 - ТРК заблокирована
                         //	3 - Осуществляется отпуск топлива
                         //	10 - ТРК занята
-                        PumpGetStatus(Driver.terminal, pmpInd, 1);
+                        PumpGetStatus(terminal, pmpInd, 1);
 
-                        lock (Driver.PumpsLocker)
+                        lock (PumpsLocker)
                         {
-                            var pmp = Driver.Pumps[pmpInd];
+                            var pmp = Pumps[pmpInd];
                             if (pmp.Blocked && pmp.BlockInitTime != null && DateTime.Now.CompareTo(pmp.BlockInitTime.Value.AddMinutes(UnblockingTimeoutMin)) > 0) 
                             {
                                 pmp.Blocked = false;
                                 pmp.BlockInitTime = null;
-                                Driver.Pumps[pmpInd] = pmp;
+                                Pumps[pmpInd] = pmp;
                             }
                         }
                         var pump = onDataInit.Pumps.First(t=>t.PumpId == pmpInd);
@@ -641,19 +677,19 @@ namespace ASUDriver
                                 // || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))
                                 continue;
 
-                            var fuel = Driver.Fuels.First(t => t.Value.Id == nozzle.GradeId);
+                            var fuel = Fuels.First(t => t.Value.Id == nozzle.GradeId);
                             var fuel_val = fuel.Value;
                             fuel_val.Active = !оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId)
                                 .Approval.Contains("Forbidden");
                             //Driver.log.Write($"\tПродукт: {fuel.Key}\r\n", 0, true);
-                            lock (Driver.PumpsLocker)
-                                Driver.Pumps[pump.PumpId].Fuels[fuel.Key] = fuel_val;
+                            lock (PumpsLocker)
+                                Pumps[pump.PumpId].Fuels[fuel.Key] = fuel_val;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Driver.log.Write("Error Обновление состояния ТРК: " + ex + "\r\n", 3, true);
+                    log.Write("Error Обновление состояния ТРК: " + ex + "\r\n", 3, true);
                 }
 
                 Thread.Sleep(1000);
@@ -1001,7 +1037,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             do
             {
                 if (do_count <= 0)
-                    Driver.log.Write($"Begin EndFillingEventWait:  [{PumpId}] {rnn}", 0, true);
+                    log.Write($"Begin EndFillingEventWait:  [{PumpId}] {rnn}", 0, true);
                 ++do_count;
                 Thread.Sleep(250);
                 //timeout -= 250;
@@ -1025,16 +1061,16 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
                                ;
                 }
             } while (next);
-            Driver.log.Write($"End EndFillingEventWait: [{PumpId}] {rnn} time ~ {0.25* do_count}c.", 0, true);
+            log.Write($"End EndFillingEventWait: [{PumpId}] {rnn} time ~ {0.25* do_count}c.", 0, true);
             //if (timeout <= 0)
             //    return null;
-            ASUDriver.Driver.log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2?.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
+            log.Write($"\t EndFillingEventWait: stat: {оnPumpStatusChanged?.StatusObj} item2.Any: {!item2?.Any(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0 && ((OnPumpStatusChange)t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING)}");
             OnPumpStatusChange result = null;
             lock (StatusesLocker)
                 if (Fillings.TryGetValue(new Tuple<int, MESSAGE_TYPES>(PumpId, MESSAGE_TYPES.OnPumpStatusChangeFilling), out item2) && item2 != null)
                     result = (OnPumpStatusChange)item2.LastOrDefault(t => String.CompareOrdinal(((OnPumpStatusChange)t).OrderUID, rnn) == 0
                         && ((OnPumpStatusChange) t).StatusObj == PUMP_STATUS.PUMP_STATUS_WAITING_COLLECTING);
-            ASUDriver.Driver.log.Write($"\t EndFillingEventWait: result: {result}");
+            log.Write($"\t EndFillingEventWait: result: {result}");
             return result;
         }
 
@@ -1250,7 +1286,7 @@ $@"
                 }
                 catch (Exception ex)
                 {
-                    Driver.log.Write("XMLPump: ERROR Write:" + ex + "\r\n", 0, true);
+                    log.Write("XMLPump: ERROR Write:" + ex + "\r\n", 0, true);
                 }
             }
         }
@@ -1272,7 +1308,7 @@ $@"
             }
             catch (Exception ex)
             {
-                Driver.log.Write("XMLPump: ERROR Reset:" + ex + "\r\n", 0, true);
+                log.Write("XMLPump: ERROR Reset:" + ex + "\r\n", 0, true);
             }
         }
 

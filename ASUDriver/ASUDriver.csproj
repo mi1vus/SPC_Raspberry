@@ -83,7 +83,6 @@
     <Compile Include="IRemote.cs" />
     <Compile Include="IRemotePump.cs" />
     <Compile Include="License.cs" />
-    <Compile Include="Logger.cs" />
     <Compile Include="Marshal.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RemotePump.cs" />
@@ -91,10 +90,15 @@
     <Compile Include="Serialize.cs" />
     <Compile Include="Shell.cs" />
     <Compile Include="StationCommon.cs" />
-    <Compile Include="XmlPumpClient.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\XmlPumpClient\XmlPumpClient.csproj">
+      <Project>{ac498ddb-bf68-4336-b9f3-b2d8eb7f24ef}</Project>
+      <Name>XmlPumpClient</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
