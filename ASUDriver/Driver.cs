@@ -259,71 +259,6 @@ $"Попытка \"{z + 1}\" результат: {result}", 2, true);
                                     + "\r\nFillingSum:" + FillingSum.ToString());
             }
         }
-#warning Удален SetDoseResponse
-        /*public struct SetDoseResponse
-        {
-            //Offset: 0
-            public Int64 TransNum;
-            //Offset: 8
-            public DateTime _DateTime;
-            //Offset: 16
-            public Int32 RetCode;
-
-            public static SetDoseResponse ReadFromIntPtr(IntPtr Ptr)
-            {
-                try
-                {
-                    var transNum = Marshal.ReadInt64(Ptr);
-                    var dateTime = DateTime.FromOADate(BitConverter.Int64BitsToDouble(Marshal.ReadInt64(Ptr, 8)));
-                    var retCode = Marshal.ReadInt32(Ptr, 16);
-
-                    return new SetDoseResponse() { TransNum = transNum, _DateTime = dateTime, RetCode = retCode };
-                }
-                catch (Exception ex)
-                {
-                                        log.Write(ex.ToString());
-                }
-                return new SetDoseResponse();
-            }
-
-            public override string ToString()
-            {
-                return string.Format("TransNum = {0}, DateTime = {1}, RetCode = {2}", TransNum, _DateTime, RetCode);
-            }
-        }*/
-        //  [StructLayout(LayoutKind.Sequential)]
-        //  public struct TransactionInfo
-        // {
-        //   public int Pump;
-        //public int PaymentCode;
-        //public int Fuel;
-        //public int OrderInMoney;
-        //public int Quantity;
-        //public int Price;
-        //public int Amount;
-        //[MarshalAs(UnmanagedType.LPStr)]
-        //public string CardNum;
-        //[MarshalAs(UnmanagedType.LPStr)]
-        //public string RRN;
-        //    public RemotePump_Driver.OrderInfo Order;
-
-        //public static TransactionInfo ReadFromIntPtr(IntPtr ptr)
-        //{
-        //    return new TransactionInfo()
-        //    {
-        //        Pump = Marshal.ReadInt32(ptr, 0),
-        //        PaymentCode = Marshal.ReadInt32(ptr, 4),
-        //        Fuel = Marshal.ReadInt32(ptr, 8),
-        //        OrderInMoney = Marshal.ReadInt32(ptr, 12),
-        //        Quantity = Marshal.ReadInt32(ptr, 16),
-        //        Price = Marshal.ReadInt32(ptr, 20),
-        //        Amount = Marshal.ReadInt32(ptr, 24),
-        //        CardNum = Marshal.PtrToStringAnsi(ptr, 28),
-        //        RRN = Marshal.PtrToStringAnsi(ptr, 32),
-        //    };
-        //}
-
-        // }
 
         public static void WriteOrderToIntPtr(OrderInfo Order, IntPtr ptr)
         {
@@ -370,10 +305,6 @@ $"Попытка \"{z + 1}\" результат: {result}", 2, true);
                 log.Write(XmlPumpClient.Collect(XmlPumpClient.terminal, pumpId, 0, "", XmlPumpClient.WaitAnswerTimeout)
                     ? $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Sucess\r\n"
                     : $"\tCollectOldOrderThread статус WAITING_COLLECTING Pump:{Pump} - Fail\r\n", 1, true);
-                //Thread.Sleep(500);
-                //XmlPumpClient.PumpGetStatus(terminal, pumpId, 1);
-                //XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(pumpId,
-                //    MESSAGE_TYPES.OnPumpStatusChange), out item);
             }
         }
 
@@ -406,35 +337,19 @@ $"Попытка \"{z + 1}\" результат: {result}", 2, true);
                 //EndFilling(Order, nullEndMessage);
                 return;
             }
-            //var prePaid = Order.Price*Order.Quantity;
-            var discount = 0; //100;//(Order.BasePrice - Order.Price)*Order.Quantity;
+            var discount = 0;
             var fuel = XmlPumpClient.Fuels.First(t => t.Value.Id == Order.ProductCode);
             int allowed = 0;
 
             Dictionary<string, FuelInfo> fuels;
             lock (XmlPumpClient.PumpsLocker)
             {
-                //Driver.log.Write("", 0, true);
                 fuels = XmlPumpClient.Pumps[Order.PumpNo].Fuels;
-                //Driver.log.Write("", 0, true);
             }
             foreach (var pumpFuel in fuels.Where(fa => fa.Value.Active))
             {
                 allowed += 1 << (pumpFuel.Value.Id - 1);
             }
-            //decimal price = 156;
-            //decimal vol = 100;
-            //if (!XmlPumpClient.Presale(
-            //    XmlPumpClient.terminal, Order.PumpNo, allowed, Order.Amount + discount,
-            //    discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode), 
-            //    Order.OrderRRN, 1, "АИ-92", 2000, "1234567890123456", 1, 3000))
-            //    return -1;
-            //Driver.log.Write("предоплата\r\n");
-
-            //if (!XmlPumpClient.Authorize(XmlPumpClient.terminal, Order.PumpNo, 10, allowed, Order.PumpNo, Order.OrderRRN, (int)(price * 100), DELIVERY_UNIT.Money, 3000))
-            //    return -1;
-            //Driver.log.Write("разрешить налив\r\n");
-
 
             Driver.log.Write(
 $@"Authorize:\r\n
@@ -453,12 +368,9 @@ Unit: {DELIVERY_UNIT.Volume.ToString()}\r\n"
             if (!XmlPumpClient.Authorize(XmlPumpClient.terminal, Order.PumpNo, (long)TransCounter,
                 allowed, Order.ProductCode, Order.OrderRRN.PadLeft(20, '0'), (int)(Order.Quantity * 100), DELIVERY_UNIT.Volume,/*(int) (Order.Amount*100), DELIVERY_UNIT.Money,*/
                 XmlPumpClient.WaitAnswerTimeout, out errMsg))
-            //if (!XmlPumpClient.Authorize(XmlPumpClient.terminal, Order.PumpNo, transCounter,
-            //    allowed, Order.ProductCode, Order.OrderRRN, (int) (Order.Amount*100), DELIVERY_UNIT.Money,
-            //    XmlPumpClient.WaitAnswerTimeout))
             {
                 Driver.log.Write($"SetDoseCallback:Authorize: {errMsg}\r\n", 1, true);
-                //EndFilling(Order, nullEndMessage);
+                EndFilling(Order, nullEndMessage);
                 return;
             }
 
@@ -474,18 +386,14 @@ $@"Presale:\r\n
 рнн: {Order.OrderRRN}\r\n
 продукт код: {Order.ProductCode}\r\n
 продукт: {fuel.Key}\r\n
-продукт цена коп: {(int)(Order.Price/*fuel.Value.Price*/ * 100)}\r\n"
+продукт цена коп: {(int)(Order.Price * 100)}\r\n"
 , 2, true);
 
             //TODO Проба со скидками!!!!
             if (!XmlPumpClient.Presale(XmlPumpClient.terminal, Order.PumpNo, allowed, Order.Amount,
                 discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode),
                 Order.OrderRRN, Order.ProductCode, fuel.Key,
-                (int)(Order.Price/*fuel.Value.Price*/ * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
-            //if (!XmlPumpClient.Presale(XmlPumpClient.terminal, Order.PumpNo, allowed, Order.Amount,
-            //    discount, Order.Quantity, XmlPumpClient.PaymentCodeToType(Order.PaymentCode),
-            //    Order.OrderRRN, Order.ProductCode, fuel.Key,
-            //    (int)(fuel.Value.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
+                (int)(Order.Price * 100), "", XmlPumpClient.WaitAnswerTimeout, 1))
             {
                 Driver.log.Write("SetDoseCallback:Presale: нет о твета на Presale\r\n", 0, true);
                 EndFilling(Order, nullEndMessage);
@@ -516,7 +424,6 @@ $@"Presale:\r\n
                         Order.ProductCode = fuel;
                         Order.PaymentCode = 99;
                         Order.Amount = op.Amount.Value;
-                        //#error неверный код продукта
 
                         Order.Price = XmlPumpClient.Fuels.First(t => t.Value.Id == fuel).Value.Price;
                         Order.Quantity = Order.Amount / Order.Price;
@@ -538,10 +445,6 @@ $@"
             \r\n\t\tне найден транзакция №{(string)TransactionID}\r\n", 0, true);
                 return;
             }
-
-
-            //TODO: Передача транзакции в систему управления
-            //lock (Driver.TransCounterLocker)
 
             Driver.log.Write("Bzer: Запрос на установку заказа ТРК: " + op.Pump.Value + "\r\n", 0, true);
             var fuelIntCode = XmlPumpClient.Fuels.First(t => t.Value.Id == Benzuber.ExcangeServer.get_int_code(op?.Fuel.Value ?? -1));
@@ -574,9 +477,7 @@ $@"Установка дозы на ТРК: {op.Pump.Value},
 сгенерирован TransID: {op.Shift.DocNum}
 RRN: {op.TransactionID}\r\n", 1, true);
 
-            //var prePaid = Order.Price*Order.Quantity;
-            var discount = 0;//100;//(Order.BasePrice - Order.Price)*Order.Quantity;
-            //var fuel1 = XmlPumpClient.Fuels.First(t => t.Value.Id == Benzuber.ExcangeServer.get_int_code(op?.Fuel.Value ?? -1));
+            var discount = 0;
             int allowed = 0;
             lock (XmlPumpClient.PumpsLocker)
                 foreach (var pumpFuel in XmlPumpClient.Pumps[op.Pump.Value].Fuels.Where(fa => fa.Value.Active))
@@ -596,7 +497,7 @@ Quantity: {op.Amount / fuelIntCode.Value.Price}\r\n
 OverQuantity: {op.Amount / fuelIntCode.Value.Price}\r\n
 PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
 OrderRRN: {op.TransactionID.PadLeft(20, '0')}\r\n
-ProductCode: {fuelIntCode.Value.InternalCode/*op.Fuel*/}\r\n
+ProductCode: {fuelIntCode.Value.InternalCode}\r\n
 Key: {fuelIntCode.Key}\r\n
 fuelPrice: {(int)(fuelIntCode.Value.Price * 100)}\r\n", 2, true
                 );
@@ -630,7 +531,7 @@ $@"Authorize:
 колонка: {op.Pump.Value}
 TransCounter: {op.Shift.DocNum}
 дост. пистолеты: {allowed}
-Nazzle: {fuelIntCode.Value.InternalCode/*op.Fuel.Value*/}
+Nazzle: {fuelIntCode.Value.InternalCode}
 RNN: {op.TransactionID.PadLeft(20, '0')}
 Limit: {(int)((op.Amount.Value * 100) / fuelIntCode.Value.Price)}
 Unit: {DELIVERY_UNIT.Volume.ToString()}
@@ -646,9 +547,8 @@ WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
             {
                 Driver.log.Write($"SetDoseCallback:Authorize: {errMsg}\r\n", 2, true);
                 EndFilling(Order, nullEndMessage);
-                return /*json(new { Result = "Error" })*/;
+                return ;
             }
-
             Driver.log.Write(
 $@"Presale:
 терминал: {XmlPumpClient.terminal}
@@ -659,7 +559,7 @@ $@"Presale:
 кол-во литры: {(int)(op.Amount.Value / fuelIntCode.Value.Price)}
 тип оплаты: {XmlPumpClient.PaymentCodeToType(1).ToString()}
 рнн: {op.TransactionID.PadLeft(20, '0')}
-продукт код: {fuelIntCode.Value.InternalCode/*op.Fuel.Value*/}
+продукт код: {fuelIntCode.Value.InternalCode}
 продукт: {fuelIntCode.Key}
 продукт цена коп: {(int)(fuelIntCode.Value.Price * 100)}
 WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
@@ -675,14 +575,10 @@ WaitAnswerTimeout: {XmlPumpClient.WaitAnswerTimeout}"
             {
                 Driver.log.Write("Bzer: SetDoseCallback:Presale: нет о твета на Presale\r\n", 0, true);
                 EndFilling(Order, nullEndMessage);
-                return /*json(new { Result = "Error" })*/;
+                return ;
             }
 
-
             Driver.log.Write("Bzer: Hалив разрешен\r\n", 0, true);
-
-
-
             WaitCollect(Order);
         }
 
@@ -704,6 +600,7 @@ $@"
                 \t\tPump: {order.PumpNo}\r\n
                 \t\tRNN: {order.OrderRRN}\r\n", 0, true);
                 EndFilling(order, nullEndMessage);
+                return;
             }
             if (!long.TryParse(order.PumpRRN, out transCounter))
             {
@@ -711,7 +608,6 @@ $@"
 $@"
                 \t\tERROR!!! \r\n PumpRRN неверный
                 PumpRRN {order.PumpRRN}\r\n", 0, true);
-                EndFilling(order, nullEndMessage);
                 return;
             }
 
@@ -724,7 +620,6 @@ $@"WaitCollect:FillingOver:\r\n
             int amount = (endMessage?.Money > 0) ? ((int)(endMessage?.Money)) : (int)((endMessage?.Liters ?? 0) * order.Price);
             int quantity = (endMessage?.Liters ?? 0) * 10;
 
-            //TODO Проба со скидками!!!!
             FillingOver(transCounter, quantity, amount);
             if (order.PaymentCode == 99)
             {
@@ -736,9 +631,8 @@ $@"WaitCollect:FillingOver:\r\n
                     Pump = endMessage?.PumpNo
                 });
             }
-            //FillingOver((long)TransCounter, (endMessage?.Liters ?? 0) * 10, endMessage?.Money ?? 0);
 
-            var discount = 0;//100; //(order.BasePrice - order.Price) * order.Quantity;
+            var discount = 0;
             var fuel = XmlPumpClient.Fuels.First(t => t.Value.Id == order.ProductCode);
             int allowed = 0;
             lock (XmlPumpClient.PumpsLocker)
@@ -755,14 +649,12 @@ $@"WaitCollect:Collect:\r\n
         OrderRRN: {order.OrderRRN}\r\n"
                 , 2, true);
 
-
             if (!XmlPumpClient.Collect( XmlPumpClient.terminal, order.PumpNo, transCounter, order.OrderRRN, XmlPumpClient.WaitAnswerTimeout))
             {
                 log.Write(
 $@"
                 \t\tERROR!!! WaitCollect:
                 \r\n\t\tнет события ответа на Collect заказа RNN{order.OrderRRN}\r\n", 0, true);
-                EndFilling(order, nullEndMessage);
                 return;
             }
         }

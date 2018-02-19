@@ -491,7 +491,7 @@ namespace ASUDriver
                             if (isValidXml(xml))
                             {
                                 builder.Remove(0, xml.Length + 21);
-                                WriteToExchangeLog("\r\n*****************\r\n<? xml version =\"1.0\"?>\r\n" + xml.Replace("\n", "\r\n"));
+                                //WriteToExchangeLog("\r\n*****************\r\n<? xml version =\"1.0\"?>\r\n" + xml.Replace("\n", "\r\n"));
                             }
                             else
                             {
@@ -645,46 +645,7 @@ namespace ASUDriver
 
                     foreach (var pmpInd in inds)
                     {
-                        //Driver.log.Write("Обновление состояния ТРК: " + pmpInd + "\r\n", 3, true);
-
-                        //DispStatus:
-                        //	0 - ТРК онлайн(при этом TransID должен = -1, иначе данный статус воспринимается как 3)
-                        //	1 - ТРК заблокирована
-                        //	3 - Осуществляется отпуск топлива
-                        //	10 - ТРК занята
-                        PumpGetStatus(terminal, pmpInd, 1);
-
-                        lock (PumpsLocker)
-                        {
-                            var pmp = Pumps[pmpInd];
-                            if (pmp.Blocked && pmp.BlockInitTime != null && DateTime.Now.CompareTo(pmp.BlockInitTime.Value.AddMinutes(UnblockingTimeoutMin)) > 0) 
-                            {
-                                pmp.Blocked = false;
-                                pmp.BlockInitTime = null;
-                                Pumps[pmpInd] = pmp;
-                            }
-                        }
-                        var pump = onDataInit.Pumps.First(t=>t.PumpId == pmpInd);
-                        foreach (var nozzle in pump.Nozzles)
-                        {
-                            OnPumpStatusChange оnPumpStatusChanged = null;
-                            Statuses.TryGetValue(
-                                new Tuple<int, MESSAGE_TYPES>(pump.PumpId, MESSAGE_TYPES.OnPumpStatusChange),
-                                    out item);
-                            оnPumpStatusChanged = item as OnPumpStatusChange;
-
-                            if (оnPumpStatusChanged == null)
-                                // || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))
-                                continue;
-
-                            var fuel = Fuels.First(t => t.Value.Id == nozzle.GradeId);
-                            var fuel_val = fuel.Value;
-                            fuel_val.Active = !оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId)
-                                .Approval.Contains("Forbidden");
-                            //Driver.log.Write($"\tПродукт: {fuel.Key}\r\n", 0, true);
-                            lock (PumpsLocker)
-                                Pumps[pump.PumpId].Fuels[fuel.Key] = fuel_val;
-                        }
+                        UpdatePumpState(pmpInd, onDataInit);
                     }
                 }
                 catch (Exception ex)
@@ -693,6 +654,51 @@ namespace ASUDriver
                 }
 
                 Thread.Sleep(1000);
+            }
+        }
+
+        public static void UpdatePumpState(int pmpInd, OnDataInit onDataInit)
+        {
+            //Driver.log.Write("Обновление состояния ТРК: " + pmpInd + "\r\n", 3, true);
+
+            //DispStatus:
+            //	0 - ТРК онлайн(при этом TransID должен = -1, иначе данный статус воспринимается как 3)
+            //	1 - ТРК заблокирована
+            //	3 - Осуществляется отпуск топлива
+            //	10 - ТРК занята
+            object item;
+            PumpGetStatus(terminal, pmpInd, 1);
+
+            lock (PumpsLocker)
+            {
+                var pmp = Pumps[pmpInd];
+                if (pmp.Blocked && pmp.BlockInitTime != null && DateTime.Now.CompareTo(pmp.BlockInitTime.Value.AddMinutes(UnblockingTimeoutMin)) > 0)
+                {
+                    pmp.Blocked = false;
+                    pmp.BlockInitTime = null;
+                    Pumps[pmpInd] = pmp;
+                }
+            }
+            var pump = onDataInit.Pumps.First(t => t.PumpId == pmpInd);
+            foreach (var nozzle in pump.Nozzles)
+            {
+                OnPumpStatusChange оnPumpStatusChanged = null;
+                Statuses.TryGetValue(
+                    new Tuple<int, MESSAGE_TYPES>(pump.PumpId, MESSAGE_TYPES.OnPumpStatusChange),
+                        out item);
+                оnPumpStatusChanged = item as OnPumpStatusChange;
+
+                if (оnPumpStatusChanged == null)
+                    // || (оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId).Approval.Contains("Forbidden")))
+                    continue;
+
+                var fuel = Fuels.First(t => t.Value.Id == nozzle.GradeId);
+                var fuel_val = fuel.Value;
+                fuel_val.Active = !оnPumpStatusChanged.Nozzles.First(t => t.NozzleId == nozzle.NozzleId)
+                    .Approval.Contains("Forbidden");
+                //Driver.log.Write($"\tПродукт: {fuel.Key}\r\n", 0, true);
+                lock (PumpsLocker)
+                    Pumps[pump.PumpId].Fuels[fuel.Key] = fuel_val;
             }
         }
 

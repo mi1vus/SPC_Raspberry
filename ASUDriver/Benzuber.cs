@@ -16,6 +16,19 @@ using ProjectSummer.Repository;
 
 namespace ASUDriver
 {
+    public enum ErrorCodes : int
+    {
+        NoError = 0,
+        CommonError = 1,
+        NoResponce = 2,
+        IncorrectRequest = 100,
+        PumpOffline = 201,
+        IncorrectFuel = 202,
+        IncorrectPump = 203,
+        PumpBusy = 204,
+        PumpOverdose = 205
+    }
+
     class Benzuber
     {
         public class ExcangeServer
@@ -247,10 +260,10 @@ namespace ASUDriver
                 try
                 {
                     //Десериализуем запрос от сервера в объект класса Request   
-                    Driver.log.Write("Bzer: Запрос src: " + Str + "\r\n", 0, true);
+                    Driver.log.Write("Bzer: Запрос src: " + Str + "\r\n", 99, true);
                     //var op = json_deser<Request>(Str);
                     Request op = ParseRequest(Str);
-                    Driver.log.Write("Bzer: Запрос: " + op?.Operation + "\r\n", 0, true);
+                    Driver.log.Write("Bzer: Запрос: " + op?.Operation + "\r\n", 99, true);
 
                     switch (op?.Operation)
                     {
@@ -404,10 +417,32 @@ namespace ASUDriver
 
                         #region OnDebitPump
 
-                        case "OnDebitPump":
+                            case "OnDebitPump":
                             {
+                                #warning возможны ложные ошибки, проверить!
+                                if (Transes.Values.Any(t => t.Pump == op.Pump/* && t.Fuel == op.Fuel*/))
+                                {
+                                    Driver.log.Write($@"OnDebitPump: Transes contains {op.Pump} - {op.Fuel}", 0, true);
+                                    return json(new { Result = "Error", ErrorCode = ErrorCodes.PumpBusy });
+                                    object item;
+                                    OnDataInit onDataInit = default(OnDataInit);
+                                    if (XmlPumpClient.Statuses.TryGetValue(
+                                            new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit),
+                                            out item) && item != null)
+                                    {
+                                        onDataInit = (OnDataInit) item;
+                                    }
+                                    XmlPumpClient.UpdatePumpState(op.Pump ?? -1, onDataInit);
 
-                                if (!Transes.ContainsKey(op.TransactionID))
+                                    var fuel = XmlPumpClient.Fuels.First(t => t.Value.Id == op.Fuel.Value);
+                                    if (XmlPumpClient.Pumps[op.Pump ?? -1].Blocked ||
+                                        !XmlPumpClient.Pumps[op.Pump ?? -1].Fuels[fuel.Key].Active)
+                                    {
+                                        Driver.log.Write($@"OnDebitPump: Pump/Fuel is blocked", 0, true);
+                                        return json(new { Result = "Error", ErrorCode = ErrorCodes.PumpBusy });
+                                    }
+                                }
+                                else if (!Transes.ContainsKey(op.TransactionID))
                                 {
                                     var shift = XmlPumpClient.ReadAndUpdateCurrentShift();
                                     op.Shift = shift;
@@ -423,8 +458,8 @@ namespace ASUDriver
                                     //Передаем "ОК" если заказ успешно передан в систему управления
                                     return json(new { Result = "OK" });
                                 }
-                                else
-                                    return json(new { Result = "Error" });
+                                
+                                return json(new { Result = "Error" });
                             }
 
                         #endregion
@@ -1083,7 +1118,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                     Driver.log.Write("Bzer: Не указаны данные для отправки", 0, true);
                     throw new Exception("Не указаны данные для отправки");
                 }
-                else Driver.log.Write($"Отправка сообщения: {Data}", 3, true);
+                else Driver.log.Write($"Отправка сообщения: {Data}", 99, true);
 
                 var str_arr = Encoding.GetBytes(Data);
                 //var Stream = getNetStream(Client);
@@ -1092,7 +1127,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 stream.Write(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }, 0, 4);
                 stream.Flush();
 
-                Driver.log.Write("Bzer: Данные успешно отправлены", 3, true);
+                Driver.log.Write("Bzer: Данные успешно отправлены", 99, true);
             }
             // Максимальная длина пакета данных
             public const int max_data_len = 2048;
@@ -1133,7 +1168,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                             {
                                 //Driver.log.Write($"waitMessage: 1241 {data}", 3, true);
                                 var msg = Encoding.GetString(data, 0, len);
-                                Driver.log.Write($"Получено сообщение: {msg}", 3, true);
+                                Driver.log.Write($"Получено сообщение: {msg}", 99, true);
                                 return msg;
                             }
                         }
@@ -1244,9 +1279,9 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 try
                 {
                     var reqId = Request?.Substring(0, 20);
-                    Driver.log.Write("\r\n\r\n" + Request?.Remove(0, 20), 10);
+                    Driver.log.Write("\r\n\r\n" + Request?.Remove(0, 20), 99, true);
                     var result = reqId + (HandleRequest?.Invoke(Request?.Remove(0, 20)) ?? "Unsupported");
-                    Driver.log.Write("\r\n\r\n" + result, 10);
+                    Driver.log.Write("\r\n\r\n" + result, 99, true);
                     return result;
                 }
                 catch (Exception ex)

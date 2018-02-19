@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
+using System.Threading;
 
 namespace ProjectSummer.Repository
 {
@@ -183,8 +184,10 @@ namespace ProjectSummer.Repository
         /// <returns></returns>
         public bool Write(string Message, int MessageLevel = 0, bool SendToConsole = false, bool ForceSave = true)
         {
-            var line = string.Format("{0:dd/MM/yy HH:mm:ss.fff}>[{1:000}]>{2}", DateTime.Now, MessageLevel, Message.Replace("\r", "\\r").Replace("\n", "\\n"));
-            var line_cons = string.Format("{0:HH:mm:ss.fff}>[{1}]>{2}", DateTime.Now, MessageLevel, Message.Replace("\r", "\\r").Replace("\n", "\\n"));
+            var th_id = Thread.CurrentThread.ManagedThreadId;
+            var th_name = Thread.CurrentThread.Name;
+            var line = string.Format("{0:dd/MM/yy HH:mm:ss.fff}>th[{1}]{2}>[{3:000}]>{4}", DateTime.Now, th_id, th_name, MessageLevel, Message.Replace("\r", "\\r").Replace("\n", "\\n"));
+            var line_cons = string.Format("{0:HH:mm:ss.fff}>th[{1}]{2}>[{3:000}]>{4}", DateTime.Now, th_id, th_name, MessageLevel, Message.Replace("\r", "\\r").Replace("\n", "\\n"));
             if ((MessageLevel <= LogLevel) && (LogEnable))
             {
                 if (SendToConsole)
