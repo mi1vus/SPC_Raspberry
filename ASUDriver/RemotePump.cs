@@ -8,9 +8,10 @@ using System.IdentityModel.Selectors;
 using System.IdentityModel.Tokens;
 //using System.Windows.Forms;
 using ASUDriver;
-using ProjectSummer.Repository;
+using ProjectSummer.Repository.ASUDriver;
+using ASUDriver.RemotePump_Driver;
 
-namespace RemotePump_Driver
+namespace ASUDriver.RemotePump_Driver
 {
     [ServiceBehavior()]
     public class RemotePump : IRemotePump
@@ -31,7 +32,7 @@ namespace RemotePump_Driver
         public bool SetID(string _TID)
         {
             try
-            {               
+            {
                 log.WriteFormated("Установка TID = {0}", _TID);
                 if (clients.ContainsKey(_TID))
                     clients[_TID] = this;
@@ -42,9 +43,9 @@ namespace RemotePump_Driver
             }
             catch
             { }
+                TID = _TID;
             if (_TID == "Benzuber")
             {
-                TID = _TID;
                 return true;
             }
             try
@@ -55,7 +56,7 @@ namespace RemotePump_Driver
                 //получаем IP клиента.
                 var config = ConfigMemory.GetConfigMemory("ASUClient");
                 string ipAddr = config["terminal_ip"];//endpoint.Address;
-                TID = !string.IsNullOrWhiteSpace(_TID)?_TID:ipAddr;
+                TID = !string.IsNullOrWhiteSpace(_TID) ? _TID : ipAddr;
                 SmartPumpControlRemote.Shell.AddTerminal(TID, ipAddr);
                 log.WriteFormated("Connected: {0}, from: {1}", TID, ipAddr);
                 return true;
@@ -67,12 +68,12 @@ namespace RemotePump_Driver
             return false;
         }
         private object busy_flag = new object();
- 
+
         private static object fillingOversLocker = new object();
-        private static Dictionary<string,List<OrderInfo>> fillingOvers = new Dictionary<string, List<OrderInfo>>();
+        private static Dictionary<string, List<OrderInfo>> fillingOvers = new Dictionary<string, List<OrderInfo>>();
         public static void AddFillingOver(long TransNum, OrderInfo Order)
         {
-            log.Write("AddFillingOver: " + Order.OrderRRN.ToString()+", TID: "+Order.TID);
+            log.Write("AddFillingOver: " + Order.OrderRRN.ToString() + ", TID: " + Order.TID);
             lock (fillingOversLocker)
             {
                 try
@@ -120,7 +121,7 @@ namespace RemotePump_Driver
         public void RaiseFillingOverEvent(string TransactionID, decimal Amount)
         {
             Driver.log.Write($@"RaiseFillingOverEvent: FillingOverEvent = {FillingOverEvent?.ToString() ?? "null"}", 2, true);
-            FillingOverEvent?.Invoke(this, new FillingOverEventArgs() {TransactionID = TransactionID, Amount = Amount});
+            FillingOverEvent?.Invoke(this, new FillingOverEventArgs() { TransactionID = TransactionID, Amount = Amount });
         }
 
         public class FillingOverEventArgs : EventArgs { public string TransactionID { get; set; } public decimal Amount { get; set; } }
@@ -144,7 +145,7 @@ namespace RemotePump_Driver
             {
                 if (host == null)
                 {
-                    var uri = new Uri("net.tcp://localhost:"+port);
+                    var uri = new Uri("net.tcp://localhost:" + port);
                     var binding = new NetTcpBinding(SecurityMode.None);
                     binding.Security.Message.ClientCredentialType = MessageCredentialType.None;
                     binding.Security.Transport.ClientCredentialType = TcpClientCredentialType.None;
@@ -160,13 +161,22 @@ namespace RemotePump_Driver
             catch (Exception ex)
             {
                 //MessageBox.Show(ex.ToString());
-                log.Write(ex.ToString(),0,true);
+                log.Write(ex.ToString(), 0, true);
             }
         }
-        private string TID;
+
+        private string ешв;
+        private string TID
+        {
+            get
+            { return ешв; }
+            set
+            { ешв = value; }
+        }
+
         public OrderInfo[] GetFillingOvers()
         {
-            //Driver.log.Write($@"GetFillingOvers: start[{fillingOvers.Count}]", 2, true);
+            Driver.log.Write($@"GetFillingOvers: start[{fillingOvers.Count}]", 2, true);
             var ret = new OrderInfo[0];
             lock (fillingOversLocker)
             {
@@ -606,23 +616,29 @@ $"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n"
         {
             lock (pumpInformationMem)
             {
-                if (pumpInformationMem.ContainsKey(No) && pumpInformationMem[No].LastUpdate.AddMilliseconds(1000) > DateTime.Now)
+                if (pumpInformationMem.ContainsKey(No) &&
+                    pumpInformationMem[No].LastUpdate.AddMilliseconds(1000) > DateTime.Now)
                     return pumpInformationMem[No].Value;
             }
             //#warning Дописать обработку получения активного топлива
-            lock ( XmlPumpClient.PumpsLocker)
-                if (! XmlPumpClient.Pumps.ContainsKey(No))
+            lock (XmlPumpClient.PumpsLocker)
+                if (!XmlPumpClient.Pumps.ContainsKey(No))
                     return new PumpInformation();
-          //  log.Write("GetPumpInformation" + No.ToString());
+            //  log.Write("GetPumpInformation" + No.ToString());
 
-            Dictionary<string, FuelInfo> fuels;
-            lock ( XmlPumpClient.PumpsLocker)
-                fuels =  XmlPumpClient.Pumps[No].Fuels;
-            
-
-          //  main.FuelListItem[] fuels;
-            PumpInformation ret = new PumpInformation();
             List<ProductInformation> prodInfo = new List<ProductInformation>();
+            lock (XmlPumpClient.PumpsLocker)
+            {
+                var fuels = XmlPumpClient.Pumps[No].Fuels;
+                foreach (var fuel in fuels.Where(fa => fa.Value.Active))
+                {
+                    prodInfo.Add(new ProductInformation() { Name = fuel.Value.Name, BasePrice = fuel.Value.Price, Code = fuel.Value.Id });
+                    log.Write("Products:" + fuel.Value.ToString());
+                }
+            }
+
+        //  main.FuelListItem[] fuels;
+            PumpInformation ret = new PumpInformation();
             var pump_status = Driver.GetDose(No);
             //log.Write("callback_GetPumpStatus: " + pump_status);
            
@@ -631,11 +647,7 @@ $"\t\rGetDoseInfo:\r\n\t\tOrderRRN: {OrderRRN} OverAmount: {tmp.OverAmount}\r\n"
             //log.WriteFormated("fuels.Length: {0}", fuels.Count);
           //  var products = GetProducts();
           //  log.WriteFormated("GetProducts.Length: {0}", products.Length);
-            foreach (var fuel in fuels.Where(fa => fa.Value.Active))
-            {
-                prodInfo.Add(new ProductInformation() { Name = fuel.Value.Name, BasePrice = fuel.Value.Price, Code = fuel.Value.Id });
-                log.Write("Products:"+ fuel.Value.ToString());
-            }
+
             log.Write($"pump_status.DispStatus: {pump_status.DispStatus}");
 
             ret.No = No;

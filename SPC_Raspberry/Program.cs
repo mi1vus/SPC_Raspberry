@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using ASUDriver;
-using ProjectSummer.Repository;
-using RemotePump_Driver;
+using ProjectSummer.Repository.ASUDriver;
+using ASUDriver.RemotePump_Driver;
 
 namespace SPC_Raspberry
 {
@@ -27,7 +27,7 @@ namespace SPC_Raspberry
 
                 if (Driver.Open(
                     //Установка дозы на ТРК
-                    (RemotePump_Driver.OrderInfo Order, IntPtr ctx) =>
+                    (ASUDriver.RemotePump_Driver.OrderInfo Order, IntPtr ctx) =>
                     {
                         long transCounter;
                         lock (Driver.TransCounterLocker)
@@ -283,7 +283,7 @@ namespace SPC_Raspberry
                                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                                 MESSAGE_TYPES.OnDataInit), out item) || item == null)
                                 {
-                                    XmlPumpClient.InitData(XmlPumpClient.terminal);
+                                    XmlPumpClient.InitData(XmlPumpClient.terminal, XmlPumpClient.сashier);
                                 }
                                 //Driver.log.Write("", 0, true);
                             }
@@ -314,7 +314,7 @@ namespace SPC_Raspberry
                                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                                 MESSAGE_TYPES.OnDataInit), out item) || item == null)
                                 {
-                                    XmlPumpClient.InitData(XmlPumpClient.terminal);
+                                    XmlPumpClient.InitData(XmlPumpClient.terminal, XmlPumpClient.сashier);
                                 }
                                 //Driver.log.Write("", 0, true);
                             }
@@ -546,7 +546,7 @@ OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", 2, true);
                     Driver.log.Write("Ошибка подключения драйвера\r\n", 0, true);
                     return;
                 }
-                RemotePump_Driver.RemotePump.StartServer();
+                ASUDriver.RemotePump_Driver.RemotePump.StartServer();
             }
             catch (Exception ex)
             {
@@ -564,7 +564,7 @@ OrderRRN: {OrderRRN.PadLeft(20, '0')/*order.OrderRRN*/}\r\n", 2, true);
             //start ASU - xml client
             Driver.InitXmlClient();
             //start Terminal client
-            OpenDriver();
+            //OpenDriver();
             //start Benzuber client
             Driver.StartBenzuber();
             //for background child process

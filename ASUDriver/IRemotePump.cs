@@ -2,7 +2,7 @@
 
 //using ServioPump_2._34_Driver;
 
-namespace RemotePump_Driver
+namespace ASUDriver.RemotePump_Driver
 {
     //[MessageContract]
     public struct PumpInformation

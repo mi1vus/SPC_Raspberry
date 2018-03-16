@@ -10,7 +10,7 @@ using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
-using ProjectSummer.Repository;
+using ProjectSummer.Repository.ASUDriver;
 
 namespace ASUDriver
 {
@@ -259,6 +259,7 @@ namespace ASUDriver
         private static byte[] _sockHost;
         private static int _sockPort;
         private static int _sockTerminal;
+        private static int _sockCashier;
         private static object ExchangeLogLocker = new object();
         private const string ExchangeLogDir = "exchange.log";
         public static int ExchangeLogLevel = 0;
@@ -276,7 +277,8 @@ namespace ASUDriver
         public static object PumpsLocker = new object();
         public static Dictionary<int, PumpInfo> Pumps = new Dictionary<int, PumpInfo>();
         public static Dictionary<string, FuelInfo> Fuels = new Dictionary<string, FuelInfo>();
-        public static int terminal = 1;
+        public static int terminal;
+        public static int сashier;
 
         public static Logger log = new Logger("XmlPumpClient");
 
@@ -302,7 +304,7 @@ namespace ASUDriver
             }
         }
 
-        public static void StartSocket(byte[] bHostB2, int iPort, int terminal)
+        public static void StartSocket(byte[] bHostB2, int iPort, int terminal, int сashier)
         {
             if (Socket != null)
                 return;
@@ -327,6 +329,7 @@ namespace ASUDriver
                 _sockHost = bHostB2;
                 _sockPort = iPort;
                 _sockTerminal = terminal;
+                _sockCashier = сashier;
                 receiveThread.Start(); //старт потока
             }
         }
@@ -368,7 +371,7 @@ namespace ASUDriver
                         //    answers.RemoveAll(t =>t is OnDataInit);
                         //    answers.Add("Замена сокета!!!1!!");
                         //}
-                        InitData(_sockTerminal);
+                        InitData(_sockTerminal, _sockCashier);
                     }
                 }
                 //else
@@ -626,7 +629,7 @@ namespace ASUDriver
                     lock (PumpsLocker)
                         inds = Pumps.Keys.ToList();
 
-                    InitData(terminal);
+                    InitData(terminal, сashier);
 
                     object item;
                     ////lock (PumpsLocker)
@@ -712,7 +715,7 @@ namespace ASUDriver
 //            Environment.Exit(0); //завершение процесса
         }
 
-        public static void InitData(int TerminalId, int Cashier = 1)
+        public static void InitData(int TerminalId, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -729,7 +732,7 @@ $@"
             SendMessage(initData1, SendTimeout);
         }
 
-        public static void GetGradePrices(int TerminalId, int PumpId, int Cashier = 1)
+        public static void GetGradePrices(int TerminalId, int PumpId, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -748,7 +751,7 @@ $@"
             SendMessage(GetGrade1, SendTimeout);
         }
 
-        private static void InitPump(int TerminalId, int PumpId, int TerminalBlocked, int Cashier = 1)
+        private static void InitPump(int TerminalId, int PumpId, int TerminalBlocked, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -769,7 +772,7 @@ $@"
             SendMessage(initPump1, SendTimeout);
         }
 
-        public static bool Init(int TerminalId, int PumpId, int TerminalBlocked, int timeout, int Cashier = 1)
+        public static bool Init(int TerminalId, int PumpId, int TerminalBlocked, int timeout, int Cashier)
         {
             //answers.RemoveAll(t =>
             //    t is OnPumpStatusChange
@@ -853,7 +856,7 @@ $@"
         public static bool Presale(int TerminalId, int PumpId, int AllowedNozzles,
             decimal PrePaid, decimal Discount, decimal Volume, PAYMENT_TYPE PaymentType,
             string RNN, int GradeId, string GradeName, int GradePrice,
-            string CardNumber, int timeout, int Cashier = 1)
+            string CardNumber, int timeout, int Cashier)
         {
             //answers.RemoveAll(t =>
             //    t is OnPumpStatusChange
@@ -896,7 +899,7 @@ $@"
         public static void SaleDataSale(int TerminalId, int PumpId, int AllowedNozzles,
             decimal PrePaid, decimal Sold, decimal Discount, decimal Volume, decimal SaleLiters, PAYMENT_TYPE PaymentType,
             string RNN, int GradeId, string GradeName, int GradePrice,
-            string CardNumber, int Cashier = 1)
+            string CardNumber, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -1150,7 +1153,7 @@ $"       <OptTransactionInfo OrderUid=\"{RNN}\"/>\r\n" +
             SendMessage(pumpRequest1, SendTimeout);
         }
 
-        public static void FiscalEventReceipt(int TerminalId, int PumpId, long DocNumberInShift, long DocNumber, long ShiftNumber, decimal SaleTotal, decimal RefundAmount, PAYMENT_TYPE PaymentType, string RNN, int Cashier = 1)
+        public static void FiscalEventReceipt(int TerminalId, int PumpId, long DocNumberInShift, long DocNumber, long ShiftNumber, decimal SaleTotal, decimal RefundAmount, PAYMENT_TYPE PaymentType, string RNN, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -1178,7 +1181,7 @@ $@"  <RefundAmount>{RefundAmount}</RefundAmount>
             SendMessage(FiscalEventReceipt1, SendTimeout);
         }
 
-        public static void PumpGetStatus(int TerminalId, int PumpId, int Cashier = 1)
+        public static void PumpGetStatus(int TerminalId, int PumpId, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");
@@ -1196,7 +1199,7 @@ $@"
             SendMessage(initData1, SendTimeout);
         }
 
-        public static void PumpStop(int TerminalId, int PumpId, int Cashier = 1)
+        public static void PumpStop(int TerminalId, int PumpId, int Cashier)
         {
             var date = DateTime.Now.ToString("yyyy.MM.dd");
             var time = DateTime.Now.ToString("hh:mm:ss");

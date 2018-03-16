@@ -4,7 +4,7 @@ using System.Text;
 using System.IO;
 using System.Threading;
 
-namespace ProjectSummer.Repository
+namespace ProjectSummer.Repository.ASUDriver
 {
     public class Logger
     {

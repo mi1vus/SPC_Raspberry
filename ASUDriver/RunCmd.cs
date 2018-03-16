@@ -89,8 +89,8 @@ namespace SmartPumpControlRemote
             public string Device;
             public string DeviceInfo;
             public string Command;
-            public ProjectSummer.Repository.Serialization.SerializableDictionary<string,string> Params;
-            public ProjectSummer.Repository.Serialization.SerializableDictionary<string, string[]> ParamsVals;
+            public ProjectSummer.Repository.ASUDriver.Serialization.SerializableDictionary<string,string> Params;
+            public ProjectSummer.Repository.ASUDriver.Serialization.SerializableDictionary<string, string[]> ParamsVals;
             public bool RequestParamsAlways { get; set; }
             public state_enum State;
             public override string ToString()

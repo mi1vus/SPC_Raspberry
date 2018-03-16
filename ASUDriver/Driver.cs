@@ -6,8 +6,8 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using ProjectSummer.Repository;
-using RemotePump_Driver;
+using ProjectSummer.Repository.ASUDriver;
+using ASUDriver.RemotePump_Driver;
 
 namespace ASUDriver
 {
@@ -458,7 +458,7 @@ $@"
                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                     MESSAGE_TYPES.OnDataInit), out item) || item == null)
                 {
-                    XmlPumpClient.InitData(XmlPumpClient.terminal);
+                    XmlPumpClient.InitData(XmlPumpClient.terminal, XmlPumpClient.сashier);
                 }
 
             PumpInfo pump;
@@ -509,7 +509,7 @@ fuelPrice: {(int)(fuelIntCode.Value.Price * 100)}\r\n", 2, true
                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                 MESSAGE_TYPES.OnDataInit), out item) || item == null)
                 {
-                    XmlPumpClient.InitData(XmlPumpClient.terminal);
+                    XmlPumpClient.InitData(XmlPumpClient.terminal, XmlPumpClient.сashier);
                 }
 
             lock (XmlPumpClient.PumpsLocker)
@@ -782,7 +782,16 @@ $@"
                             Console.WriteLine("Id терминала: " +  XmlPumpClient.terminal.ToString());
                         }
                     }
-
+                    if (Params.ContainsKey("Cashier"))
+                    {
+                        if (!int.TryParse(Params["Cashier"], out XmlPumpClient.сashier))
+                            XmlPumpClient.сashier = 1;
+                        else
+                        {
+                            log.Write("Cashier терминала: " + XmlPumpClient.сashier.ToString());
+                            Console.WriteLine("Cashier терминала: " + XmlPumpClient.сashier.ToString());
+                        }
+                    }
                     var digits = ip.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
                     byte[] host;
 
@@ -829,8 +838,8 @@ $@"
 
 
 
-                    XmlPumpClient.StartSocket(host, pt,  XmlPumpClient.terminal);
-                    XmlPumpClient.InitData( XmlPumpClient.terminal);
+                    XmlPumpClient.StartSocket(host, pt,  XmlPumpClient.terminal, XmlPumpClient.сashier);
+                    XmlPumpClient.InitData( XmlPumpClient.terminal, XmlPumpClient.сashier);
                     log.Write(
 $@"XmlPumpClient Open ip: {host[0]}.{host[1]}.{host[2]}.{host[3]}
     port: {pt}{Environment.NewLine}
@@ -1106,10 +1115,10 @@ $@"XmlPumpClient Open ip: {host[0]}.{host[1]}.{host[2]}.{host[3]}
                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                     MESSAGE_TYPES.OnDataInit), out item) || item == null)
                 {
-                    XmlPumpClient.InitData( XmlPumpClient.terminal);
+                    XmlPumpClient.InitData( XmlPumpClient.terminal, XmlPumpClient.сashier);
                 }
 
-                XmlPumpClient.GetGradePrices( XmlPumpClient.terminal, 1);
+                XmlPumpClient.GetGradePrices( XmlPumpClient.terminal, 1, XmlPumpClient.сashier);
                 Thread.Sleep(500);
                 //XmlPumpClient.PumpGetStatus( XmlPumpClient.terminal, 1);
 
@@ -1267,7 +1276,7 @@ $@"XmlPumpClient Open ip: {host[0]}.{host[1]}.{host[2]}.{host[3]}
                 if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                     MESSAGE_TYPES.OnDataInit), out item) || item == null)
                 {
-                    XmlPumpClient.InitData( XmlPumpClient.terminal);
+                    XmlPumpClient.InitData( XmlPumpClient.terminal, XmlPumpClient.сashier);
                 }
 
                 if (XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1, MESSAGE_TYPES.OnDataInit), out item) && item != null)

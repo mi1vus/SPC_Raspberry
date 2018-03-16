@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ProjectSummer.Repository
+namespace ProjectSummer.Repository.ASUDriver
 {
     /// <summary>
     /// Класс для очистки блоков неуправляемой памяти

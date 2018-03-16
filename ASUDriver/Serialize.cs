@@ -5,7 +5,7 @@ using System.Xml.Serialization;
 using System.Xml;
 using System.Xml.Schema;
 
-namespace ProjectSummer.Repository
+namespace ProjectSummer.Repository.ASUDriver
 {
     public class Serialization
     {

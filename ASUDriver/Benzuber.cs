@@ -12,7 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
-using ProjectSummer.Repository;
+using ProjectSummer.Repository.ASUDriver;
 
 namespace ASUDriver
 {
@@ -528,21 +528,21 @@ namespace ASUDriver
                                         }
                                     //                                    if (refund)
                                     //                                    {
-                                    //                                        Driver.log.Write(
-                                    //                                        $@"Bzer: WaitCollectThread:SaleDataSale:\r\n
-                                    //terminal: {XmlPumpClient.terminal}\r\n
-                                    //PumpNo: {op_in_storage.Pump}\r\n
-                                    //allowed: {allowed}\r\n
-                                    //Amount: {op_in_storage.Amount}\r\n
-                                    //OverAmount: {overSumm}\r\n
-                                    //discount: {discount}\r\n
-                                    //Quantity: {op_in_storage.Amount.Value / fuel.Value.Price}\r\n
-                                    //OverQuantity: {overQuantity}\r\n
-                                    //PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
-                                    //OrderRRN: {op.TransactionID.PadLeft(20, '0')}\r\n
-                                    //ProductCode: {op_in_storage.Fuel.Value}\r\n
-                                    //Key: {fuel.Key}\r\n
-                                    //fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n", 2, true);
+                                    Driver.log.Write(
+                                    $@"Bzer: WaitCollectThread:SaleDataSale:\r\n
+                                    terminal: {XmlPumpClient.terminal}\r\n
+                                    PumpNo: {op_in_storage.Pump}\r\n
+                                    allowed: {allowed}\r\n
+                                    Amount: {op_in_storage.Amount}\r\n
+                                    OverAmount: {overSumm}\r\n
+                                    discount: {discount}\r\n
+                                    Quantity: {op_in_storage.Amount.Value / fuel.Value.Price}\r\n
+                                    OverQuantity: {overQuantity}\r\n
+                                    PAYMENT_TYPE: {PAYMENT_TYPE.Cash}\r\n
+                                    OrderRRN: {op.TransactionID.PadLeft(20, '0')}\r\n
+                                    ProductCode: {op_in_storage.Fuel.Value}\r\n
+                                    Key: {fuel.Key}\r\n
+                                    fuelPrice: {(int)(fuel.Value.Price * 100)}\r\n", 2, true);
 
                                     //                                        //TODO Проба со скидками!!!!
 
@@ -558,8 +558,22 @@ namespace ASUDriver
 
                                     //TODO Проба со скидками!!!!
 
-                                    XmlPumpClient.SaleDataSale(XmlPumpClient.terminal, op_in_storage.Pump.Value, allowed, op_in_storage.Amount.Value, overSumm, discount, op_in_storage.Amount.Value / fuel.Value.Price, overQuantity,
-                                        PAYMENT_TYPE.Cash, op.TransactionID.PadLeft(20, '0'), op_in_storage.Fuel.Value, fuel.Key, (int)(fuel.Value.Price * 100), "", 1);
+                                    XmlPumpClient.SaleDataSale(
+                                        XmlPumpClient.terminal, 
+                                        op_in_storage.Pump.Value, 
+                                        allowed, 
+                                        op_in_storage.Amount.Value, 
+                                        overSumm, 
+                                        discount, 
+                                        op_in_storage.Amount.Value / fuel.Value.Price, 
+                                        overQuantity,
+                                        PAYMENT_TYPE.Cash, 
+                                        op.TransactionID.PadLeft(20, '0'), 
+                                        op_in_storage.Fuel.Value, 
+                                        fuel.Key, 
+                                        (int)(fuel.Value.Price * 100), 
+                                        "", 
+                                        1);
 
 
 
@@ -604,7 +618,7 @@ namespace ASUDriver
                                         if (!XmlPumpClient.Statuses.TryGetValue(new Tuple<int, MESSAGE_TYPES>(-1,
                                             MESSAGE_TYPES.OnDataInit), out item) || item == null)
                                         {
-                                            XmlPumpClient.InitData(XmlPumpClient.terminal);
+                                            XmlPumpClient.InitData(XmlPumpClient.terminal, XmlPumpClient.сashier);
                                         }
 
 
@@ -624,8 +638,8 @@ namespace ASUDriver
                                     //Driver.log.Write("Bzer: изм. статуса\r\n", 0, true);
 
                                     //var res = XmlPumpClient.answers;
-                                    var res2 = XmlPumpClient.Statuses;
-                                    var res3 = XmlPumpClient.Fillings;
+                                    //var res2 = XmlPumpClient.Statuses;
+                                    //var res3 = XmlPumpClient.Fillings;
 
                                     XmlPumpClient.ClearAllTransactionAnswers(op_in_storage.Pump.Value, op.TransactionID.PadLeft(20, '0'));
                                     if (true)
@@ -652,9 +666,17 @@ namespace ASUDriver
                                         XmlPumpClient.WriteOrReplaceToFile(1, (++last_trans_in_shift).ToString());
                                         XmlPumpClient.WriteOrReplaceToFile(2, op_in_storage.Shift.DocNum.ToString());
 
-                                        XmlPumpClient.FiscalEventReceipt(XmlPumpClient.terminal, op_in_storage.Pump.Value/*order.PumpNo*/,
-                                            last_trans_in_shift, op_in_storage.Shift.DocNum, op_in_storage.Shift.Number,
-                                           overSumm/*(endMessage?.Money ?? 0) / 100m*/, 0, PAYMENT_TYPE.Cash, op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/, 1);
+                                        XmlPumpClient.FiscalEventReceipt(
+                                            XmlPumpClient.terminal, 
+                                            op_in_storage.Pump.Value/*order.PumpNo*/,
+                                            last_trans_in_shift, 
+                                            op_in_storage.Shift.DocNum, 
+                                            op_in_storage.Shift.Number,
+                                            overSumm/*(endMessage?.Money ?? 0) / 100m*/, 
+                                            0, 
+                                            PAYMENT_TYPE.Cash, 
+                                            op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/, 
+                                            1);
                                         Driver.log.Write(
 $@"Bzer: чек:\r\n
 terminal: {XmlPumpClient.terminal}\r\n
@@ -1022,7 +1044,7 @@ OrderRRN: {op.TransactionID.PadLeft(20, '0') /*order.OrderRRN*/}\r\n", 2, true);
                 // Authenticate the server but don't require the client to authenticate.
                 try
                 {
-                    sslStream.AuthenticateAsServer(Certificate, false, SslProtocols.Tls12, false /*true*/);
+                    sslStream.AuthenticateAsServer(Certificate, false, SslProtocols.Tls, false /*true*/);
 
                     // Set timeouts for the read and write to 5 seconds.
                     sslStream.ReadTimeout = 30000;

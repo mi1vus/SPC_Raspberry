@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Net.NetworkInformation;
 
-namespace ProjectSummer.Repository
+namespace ProjectSummer.Repository.ASUDriver
 {
     public class ActivationClass
     {

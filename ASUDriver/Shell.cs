@@ -96,7 +96,7 @@ namespace SmartPumpControlRemote
                         }
                         else
                         {
-                            var Commands = ProjectSummer.Repository.Serialization.Deserialize<RunCmd.Cmd[]>(Dir + ActionName + ".xml");
+                            var Commands = ProjectSummer.Repository.ASUDriver.Serialization.Deserialize<RunCmd.Cmd[]>(Dir + ActionName + ".xml");
                             //RunCmd.ShowDialog(Commands, ActionName);
                             break;
                         }

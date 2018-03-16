@@ -11,7 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
-using ProjectSummer.Repository;
+using ProjectSummer.Repository.ASUDriver;
 
 namespace ASUDriver
 {
@@ -203,12 +203,12 @@ namespace ASUDriver
         { IsBackground = true };
         private static void Pump_FillingOverEvent(object sender, RemotePump_Driver.RemotePump.FillingOverEventArgs e)
         {
-            log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
-            Driver.log.Write($"Подтверждения налива: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
+            log.Write($"Подтверждения налива Pump_FillingOverEvent: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
+            Driver.log.Write($"Подтверждения налива Pump_FillingOverEvent: {e.TransactionID}, сумма: {e.Amount:0.00}р", 0, true);
 
             Pump_FillingOverEvent_background_th.Start();
         }
-        private static List<RemotePump_Driver.OrderInfo> unReciverOrders = new List<RemotePump_Driver.OrderInfo>();
+        private static List<ASUDriver.RemotePump_Driver.OrderInfo> unReciverOrders = new List<RemotePump_Driver.OrderInfo>();
 
         public int OnDebitPump(int PumpNum, int Fuel, string TransID, decimal Amount)
         {

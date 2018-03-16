@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 
-namespace ProjectSummer.Repository
+namespace ProjectSummer.Repository.ASUDriver
 {
     /// <summary>
     /// Класс работы с хранилищем параметров изменение параметров осуществляется через индексаторы.
